@@ -69,7 +69,7 @@ function create_get_users() {
 				$primary_jobs	= join( ' ', $profession_names );
 
 			endif;
-				       	
+
 			$userdata						= get_userdata( $user );
 			$user_object['ID'] 				= $user;
 			$user_object['primary_job'] 	= $primary_jobs;
@@ -85,11 +85,11 @@ function create_get_users() {
 			$user_object['linkedin_url']	= get_user_meta( $user, 'user_linkedin', true );
 			$user_object['skills']			= unserialize( get_user_meta( $user, 'user_skills', true ) );
 			$user_object['avatar']			= create_get_avatar( $user );
-			
+
 			if( empty( $user_object['avatar'] ) ) {
 				continue;
 			}
-			
+
 			$user_array[] = $user_object;
 		}
 
@@ -97,9 +97,9 @@ function create_get_users() {
 	} else {
 		$user_array = get_transient( 'users_query' );
 	}
-		
+
 	$result = array( 'users' => $user_array );
-	
+
 	if ( isset( $result ) ) {
 		die( json_encode( $result ) );
 	} else {
@@ -155,10 +155,10 @@ function create_profession_styles() {
 
 /**
  * Checks if the user is valid (has all the right info) and returns boolean.
- * 
+ *
  */
 function create_is_valid_user( $user_id ) {
-	
+
 	if( create_user_errors( $user_id ) == null )
 		return true;
 	else
@@ -170,19 +170,19 @@ function create_is_valid_user( $user_id ) {
  * (i.e. missing data required to be a valid user)
  */
 function create_user_errors( $user_id ) {
-	
+
 	$user_data		= get_userdata( $user_id );
 	$email			= $user_data->user_email;
-	
+
 	$user_meta		= get_user_meta( $user_id );
 	$first_name		= isset( $user_meta['first_name'][0] );
 	$last_name		= isset( $user_meta['last_name'][0] );
 	$zip			= isset( $user_meta['user_zip'][0] );
-	$primary_job	= isset( $user_meta['user_primary_job'][0] );	
+	$primary_job	= isset( $user_meta['user_primary_job'][0] );
 	$avatar			= get_user_meta( $user_id, 'avatar', true );
 
 	$errors = array();
-	
+
 	if ( $email == '' )
 		$errors[] = ' email';
 
@@ -194,15 +194,15 @@ function create_user_errors( $user_id ) {
 
 	if ( !$zip )
 		$errors[] = ' zip code';
-			
+
 	if ( !$primary_job )
 		$errors[] = ' primary job';
 
 	if ( ! $avatar )
 		$errors[] = ' avatar';
-			
+
 	$output = implode( ',', $errors );
-	
+
 	return $output;
 }
 
@@ -214,9 +214,9 @@ function create_clean_username( $user_id ) {
 	$user_info = get_userdata( $user_id );
 
 	$username = strtolower( $user_info->user_login );
-	
+
 	$output = preg_replace("![^a-z0-9]+!i", "-", $username );
-	
+
 	return $output;
 }
 
@@ -255,31 +255,31 @@ function create_get_oneall_user( $user_id, $attribute = '' ) {
 
 	// Getting results
 	$result = curl_exec($ch);
-		
+
 	$data = json_decode($result);
-		
+
 	$output = '';
-	
+
 	if( isset( $data->response->result ) ){
-	
+
 		if( $attribute == '' ){
 			$output = isset( $data->response->result->data->user->identities );
 		}
-		
+
 		if( $attribute == 'thumbnail' && isset( $data->response->result->data->user->identities->identity[0]->thumbnailUrl ) ) {
 			$output = $data->response->result->data->user->identities->identity[0]->thumbnailUrl;
 		}
-	
+
 		if( $attribute == 'picture' && isset( $data->response->result->data->user->identities->identity[0]->pictureUrl ) ) {
 			$output = $data->response->result->data->user->identities->identity[0]->pictureUrl;
-		}	
-		
+		}
+
 	} else {
 		$output = create_get_avatar_url( get_avatar( $user_id, 150 ) );
 	}
-		
+
 	return $output;
-	
+
 }
 
 /**
@@ -305,7 +305,7 @@ function create_is_404( $url ) {
 	$handle = curl_init($url);
 
 	curl_setopt($handle,  CURLOPT_RETURNTRANSFER, TRUE);
-	
+
 	/* Get the HTML or whatever is linked in $url. */
 	$response = curl_exec($handle);
 
@@ -317,9 +317,9 @@ function create_is_404( $url ) {
 	} else {
 		return true;
 	}
-		
+
 	curl_close($handle);
-	
+
 }
 
 /**
@@ -330,14 +330,14 @@ function create_choose_avatar( $user_id ) {
 	// Make sure the user can edit this user
 	if ( !current_user_can( 'edit_user', $user_id ) )
 		return false;
-	
+
 	$user = get_user_by( 'id', $user_id );
 	$hash = md5( strtolower( trim( $user->user_email ) ) );
-	
+
 	$avatar_local		= basename( get_user_meta( $user_id, 'avatar_local', true ) );
 	$avatar_social		= create_get_oneall_user( $user_id, 'thumbnail' );
 	$avatar_gravatar	= 'http://www.gravatar.com/avatar/'. $hash .'?s=200&r=pg&d=404';
-	
+
 	if( isset( $avatar_gravatar ) ) {
 		if( create_is_404( $avatar_gravatar ) ){
 			$check_gravatar		= file_get_contents( $avatar_gravatar );
@@ -363,22 +363,22 @@ function create_choose_avatar( $user_id ) {
 function create_get_avatar( $user_id ) {
 	global $blog_id;
 	$image = get_user_meta( $user_id, 'avatar', true );
-	
+
 	if( empty( $image ) ) {
 		return;
 	}
-		
+
 	if( file_exists( get_stylesheet_directory() .'/uploads/avatars/'. basename( $image ) ) ) {
 		$image =  get_stylesheet_directory() .'/uploads/avatars/'. basename( $image );
 	}
-	
+
 	$output	= get_stylesheet_directory_uri() . "/timthumb.php?src=". $image ."&w=165&h=165&zc=1&a=c&f=2";
 
 	$headers = get_headers( $output, 1 );
 	if ( $headers[0] != 'HTTP/1.1 200 OK' ) {
 		return;
 	}
-				
+
 	return $output;
 }
 
@@ -396,10 +396,10 @@ function create_change_upload_path( $path_info, $form_id ){
  * updated, set the primary job, and delete the cached users_query.
  */
 function create_update_avatar( $entry, $form ){
-	
+
 	global $current_user;
     get_currentuserinfo();
-	
+
 	$user = get_user_by( 'id', $current_user->ID );
 	$hash = md5( strtolower( trim( $user->user_email ) ) );
 
