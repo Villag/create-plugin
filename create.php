@@ -61,8 +61,8 @@ function create_email_user() {
 	$user_object_from	= get_userdata( $_POST['user_id_from'] );
 
 	$to					= $user_object_to->user_email;
-	$headers[]			= 'From: '. $user_object_from->first_name .' '. $user_object_from->last_name .' <'. $user_object_from->email .'>';
-	$headers[]			= 'Reply-To: ' . $user_object_from->email;
+	$headers[]			= 'From: '. $user_object_from->first_name .' '. $user_object_from->last_name .' <'. $user_object_from->user_email .'>';
+	$headers[]			= 'Reply-To: ' . $user_object_from->user_email;
 
 	$result				= wp_mail( sanitize_email( $to ), esc_html( $subject ), $message, $headers );
 
@@ -86,6 +86,11 @@ function create_email_user() {
 		);
 	}
 }
+
+function create_mail_from( $email ) {
+	return 'info@createdenton.com';
+}
+add_filter( 'wp_mail_from', 'create_mail_from' );
 
 /**
  * Gets all users for the current site and returns the data as a JSON
