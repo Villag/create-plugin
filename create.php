@@ -28,12 +28,16 @@ if ( ! defined( 'WPINC' ) ) {
 // Register user taxonomies
 add_action( 'init', 'create_register_user_taxonomy' );
 
-// Insert 'profession' CSS into HEAD
-add_action( 'wp_head', 'create_profession_styles' );
+// Insert 'user_category' CSS into HEAD
+add_action( 'wp_head', 'create_user_category_styles' );
 
 // Sets up ajax hooks for calling users
 add_action( 'wp_ajax_nopriv_create_get_users',	'create_get_users' );
 add_action( 'wp_ajax_create_get_users',			'create_get_users' );
+
+// Email user
+add_action( 'wp_ajax_nopriv_create_email_user',	'create_email_user' );
+add_action( 'wp_ajax_create_email_user',	'create_email_user' );
 
 // After user registration, login user
 add_action( 'gform_user_registered', 'create_gravity_registration_autologin', 10, 4 );
@@ -45,31 +49,70 @@ add_filter( 'gform_upload_path', 'create_change_upload_path', 10, 2 );
 add_action( 'gform_after_submission', 'create_update_avatar', 10, 2 );
 
 /**
+ * Via Ajax, sends the given user an email. This avoids exposing the user's
+ * email address to anyone.
+ */
+function create_email_user() {
+	check_ajax_referer( 'create_email_user_ajax_nonce', 'security' );
+
+	$subject			= $_POST['subject'];
+	$message			= $_POST['message'];
+	$user_object_to		= get_userdata( $_POST['user_id_to'] );
+	$user_object_from	= get_userdata( $_POST['user_id_from'] );
+
+	$to					= $user_object_to->user_email;
+	$headers[] = 'From: '. $user_object_from->first_name .' '. $user_object_from->last_name .' <'. $user_object_from->first_name .'>';
+
+	$result				= wp_mail( sanitize_email( $to ), esc_html( $subject ), $message, $headers );
+
+	if ( isset( $result ) && ( $result == 1 ) ) {
+		die(
+			json_encode(
+				array(
+					'success' => true,
+					'message' => __( 'Your email was successfully sent to '. $user_object_to->first_name .'.', 'create' )
+				)
+			)
+		);
+	} else {
+		die(
+			json_encode(
+				array(
+					'success' => false,
+					'message' => __( 'An error occured. Please refresh the page and try again.', 'create' )
+				)
+			)
+		);
+	}
+}
+
+/**
  * Gets all users for the current site and returns the data as a JSON
  * encoded object for use by an ajax call from the theme.
  */
 function create_get_users() {
+
 	if ( false === ( $user_array = get_transient( 'users_query' ) ) ) {
 		$users = get_users( array( 'fields' => 'ID' ) );
 		shuffle($users);
 		foreach ( $users as $user ) {
 
-			$professions = wp_get_object_terms( $user, 'profession' );
-			if ( $professions && ! is_wp_error( $professions ) ) : 
-			
-				$profession_slugs = array();
-				$profession_names = array();
-			
-				foreach ( $professions as $profession ) {
-					$profession_slugs[] = $profession->slug;
-					$profession_names[] = $profession->name;
+			$user_categories = wp_get_object_terms( $user, 'user_category' );
+			if ( $user_categories && ! is_wp_error( $user_categories ) ) :
+
+				$user_category_slugs = array();
+				$user_category_names = array();
+
+				foreach ( $user_categories as $user_category ) {
+					$user_category_slugs[] = $user_category->slug;
+					$user_category_names[] = $user_category->name;
 				}
-									
-				$types			= join( ' ', $profession_slugs );
-				$primary_jobs	= join( ' ', $profession_names );
+
+				$types			= join( ' ', $user_category_slugs );
+				$primary_jobs	= join( ' ', $user_category_names );
 
 			endif;
-				       	
+
 			$userdata						= get_userdata( $user );
 			$user_object['ID'] 				= $user;
 			$user_object['primary_job'] 	= $primary_jobs;
@@ -85,11 +128,11 @@ function create_get_users() {
 			$user_object['linkedin_url']	= get_user_meta( $user, 'user_linkedin', true );
 			$user_object['skills']			= unserialize( get_user_meta( $user, 'user_skills', true ) );
 			$user_object['avatar']			= create_get_avatar( $user );
-			
+
 			if( empty( $user_object['avatar'] ) ) {
 				continue;
 			}
-			
+
 			$user_array[] = $user_object;
 		}
 
@@ -97,9 +140,9 @@ function create_get_users() {
 	} else {
 		$user_array = get_transient( 'users_query' );
 	}
-		
+
 	$result = array( 'users' => $user_array );
-	
+
 	if ( isset( $result ) ) {
 		die( json_encode( $result ) );
 	} else {
@@ -130,18 +173,18 @@ function create_gravity_registration_autologin( $user_id, $user_config, $entry, 
 }
 
 /**
- * Get the 'profession' terms and colors and create a <style> block
+ * Get the 'user_category' terms and colors and create a <style> block
  */
-function create_profession_styles() {
-	$terms = get_terms( array( 'profession' ), array( 'hide_empty' => false ) );
+function create_user_category_styles() {
+	$terms = get_terms( array( 'user_category' ), array( 'hide_empty' => false ) );
 	if( $terms ) {
 		echo "<style id='job_manager_colors'>\n";
-		$profession_options = get_option( 'profession_options' );
+		$user_category_options = get_option( 'user_category_options' );
 		foreach ( $terms as $term ) {
-			if( ! array_key_exists( $term->term_id, $profession_options) ) {
+			if( ! array_key_exists( $term->term_id, $user_category_options) ) {
 				continue;
 			}
-			foreach( $profession_options[$term->term_id] as $term_meta ) {
+			foreach( $user_category_options[$term->term_id] as $term_meta ) {
 				$color = $term_meta;
 				echo '.item.'. $term->slug .', .'. $term->slug .' .modal-header { background: '. $color .'}';
 				echo '.card-back.'. $term->slug .' a { color: '. $color .'}';
@@ -155,10 +198,10 @@ function create_profession_styles() {
 
 /**
  * Checks if the user is valid (has all the right info) and returns boolean.
- * 
+ *
  */
 function create_is_valid_user( $user_id ) {
-	
+
 	if( create_user_errors( $user_id ) == null )
 		return true;
 	else
@@ -170,19 +213,19 @@ function create_is_valid_user( $user_id ) {
  * (i.e. missing data required to be a valid user)
  */
 function create_user_errors( $user_id ) {
-	
+
 	$user_data		= get_userdata( $user_id );
 	$email			= $user_data->user_email;
-	
+
 	$user_meta		= get_user_meta( $user_id );
 	$first_name		= isset( $user_meta['first_name'][0] );
 	$last_name		= isset( $user_meta['last_name'][0] );
 	$zip			= isset( $user_meta['user_zip'][0] );
-	$primary_job	= isset( $user_meta['user_primary_job'][0] );	
+	$primary_job	= isset( $user_meta['user_primary_job'][0] );
 	$avatar			= get_user_meta( $user_id, 'avatar', true );
 
 	$errors = array();
-	
+
 	if ( $email == '' )
 		$errors[] = ' email';
 
@@ -194,15 +237,15 @@ function create_user_errors( $user_id ) {
 
 	if ( !$zip )
 		$errors[] = ' zip code';
-			
+
 	if ( !$primary_job )
 		$errors[] = ' primary job';
 
 	if ( ! $avatar )
 		$errors[] = ' avatar';
-			
+
 	$output = implode( ',', $errors );
-	
+
 	return $output;
 }
 
@@ -214,9 +257,9 @@ function create_clean_username( $user_id ) {
 	$user_info = get_userdata( $user_id );
 
 	$username = strtolower( $user_info->user_login );
-	
+
 	$output = preg_replace("![^a-z0-9]+!i", "-", $username );
-	
+
 	return $output;
 }
 
@@ -255,31 +298,31 @@ function create_get_oneall_user( $user_id, $attribute = '' ) {
 
 	// Getting results
 	$result = curl_exec($ch);
-		
+
 	$data = json_decode($result);
-		
+
 	$output = '';
-	
+
 	if( isset( $data->response->result ) ){
-	
+
 		if( $attribute == '' ){
 			$output = isset( $data->response->result->data->user->identities );
 		}
-		
+
 		if( $attribute == 'thumbnail' && isset( $data->response->result->data->user->identities->identity[0]->thumbnailUrl ) ) {
 			$output = $data->response->result->data->user->identities->identity[0]->thumbnailUrl;
 		}
-	
+
 		if( $attribute == 'picture' && isset( $data->response->result->data->user->identities->identity[0]->pictureUrl ) ) {
 			$output = $data->response->result->data->user->identities->identity[0]->pictureUrl;
-		}	
-		
+		}
+
 	} else {
 		$output = create_get_avatar_url( get_avatar( $user_id, 150 ) );
 	}
-		
+
 	return $output;
-	
+
 }
 
 /**
@@ -305,7 +348,7 @@ function create_is_404( $url ) {
 	$handle = curl_init($url);
 
 	curl_setopt($handle,  CURLOPT_RETURNTRANSFER, TRUE);
-	
+
 	/* Get the HTML or whatever is linked in $url. */
 	$response = curl_exec($handle);
 
@@ -317,9 +360,9 @@ function create_is_404( $url ) {
 	} else {
 		return true;
 	}
-		
+
 	curl_close($handle);
-	
+
 }
 
 /**
@@ -330,14 +373,14 @@ function create_choose_avatar( $user_id ) {
 	// Make sure the user can edit this user
 	if ( !current_user_can( 'edit_user', $user_id ) )
 		return false;
-	
+
 	$user = get_user_by( 'id', $user_id );
 	$hash = md5( strtolower( trim( $user->user_email ) ) );
-	
+
 	$avatar_local		= basename( get_user_meta( $user_id, 'avatar_local', true ) );
 	$avatar_social		= create_get_oneall_user( $user_id, 'thumbnail' );
 	$avatar_gravatar	= 'http://www.gravatar.com/avatar/'. $hash .'?s=200&r=pg&d=404';
-	
+
 	if( isset( $avatar_gravatar ) ) {
 		if( create_is_404( $avatar_gravatar ) ){
 			$check_gravatar		= file_get_contents( $avatar_gravatar );
@@ -363,22 +406,22 @@ function create_choose_avatar( $user_id ) {
 function create_get_avatar( $user_id ) {
 	global $blog_id;
 	$image = get_user_meta( $user_id, 'avatar', true );
-	
+
 	if( empty( $image ) ) {
 		return;
 	}
-		
+
 	if( file_exists( get_stylesheet_directory() .'/uploads/avatars/'. basename( $image ) ) ) {
 		$image =  get_stylesheet_directory() .'/uploads/avatars/'. basename( $image );
 	}
-	
+
 	$output	= get_stylesheet_directory_uri() . "/timthumb.php?src=". $image ."&w=165&h=165&zc=1&a=c&f=2";
 
 	$headers = get_headers( $output, 1 );
 	if ( $headers[0] != 'HTTP/1.1 200 OK' ) {
 		return;
 	}
-				
+
 	return $output;
 }
 
@@ -396,10 +439,10 @@ function create_change_upload_path( $path_info, $form_id ){
  * updated, set the primary job, and delete the cached users_query.
  */
 function create_update_avatar( $entry, $form ){
-	
+
 	global $current_user;
     get_currentuserinfo();
-	
+
 	$user = get_user_by( 'id', $current_user->ID );
 	$hash = md5( strtolower( trim( $user->user_email ) ) );
 
@@ -421,7 +464,8 @@ function create_update_avatar( $entry, $form ){
 	}
 
 	// Set the primary job
-	$term = get_term_by( 'id', intval( $entry['6'] ), 'profession', ARRAY_A );
+	$term = get_term_by( 'id', intval( $entry['6'] ), 'user_category', ARRAY_A );
+//die( print_r( $term ));
 	$return = wp_set_object_terms( $current_user->ID, $term['slug'], $term['taxonomy'], false );
 
 	// Clear the cached user query so this new avatar will show up
@@ -429,34 +473,34 @@ function create_update_avatar( $entry, $form ){
 }
 
 /**
- * Registers the 'profession' taxonomy for users.  This is a taxonomy for the 'user' object type rather than a 
+ * Registers the 'user_category' taxonomy for users.  This is a taxonomy for the 'user' object type rather than a
  * post being the object type.
  */
 function create_register_user_taxonomy() {
 
 	 register_taxonomy(
-		'profession',
+		'user_category',
 		'user',
 		array(
 			'public' => true,
 			'labels' => array(
-				'name' => __( 'Professions' ),
-				'singular_name' => __( 'Profession' ),
-				'menu_name' => __( 'Professions' ),
-				'search_items' => __( 'Search Professions' ),
-				'popular_items' => __( 'Popular Professions' ),
-				'all_items' => __( 'All Professions' ),
-				'edit_item' => __( 'Edit Profession' ),
-				'update_item' => __( 'Update Profession' ),
-				'add_new_item' => __( 'Add New Profession' ),
-				'new_item_name' => __( 'New Profession Name' ),
-				'separate_items_with_commas' => __( 'Separate professions with commas' ),
-				'add_or_remove_items' => __( 'Add or remove professions' ),
-				'choose_from_most_used' => __( 'Choose from the most popular professions' ),
+				'name' => __( 'Users Categories' ),
+				'singular_name' => __( 'Category' ),
+				'menu_name' => __( 'Categories' ),
+				'search_items' => __( 'Search Categories' ),
+				'popular_items' => __( 'Popular Categories' ),
+				'all_items' => __( 'All Categories' ),
+				'edit_item' => __( 'Edit Category' ),
+				'update_item' => __( 'Update Category' ),
+				'add_new_item' => __( 'Add New Category' ),
+				'new_item_name' => __( 'New Category Name' ),
+				'separate_items_with_commas' => __( 'Separate categories with commas' ),
+				'add_or_remove_items' => __( 'Add or remove categories' ),
+				'choose_from_most_used' => __( 'Choose from the most popular categories' ),
 			),
 			'rewrite' => array(
 				'with_front' => true,
-				'slug' => 'author/profession' // Use 'author' (default WP user slug).
+				'slug' => 'author/user_category' // Use 'author' (default WP user slug).
 			),
 			'capabilities' => array(
 				'manage_terms' => 'edit_users', // Using 'edit_users' cap to keep this simple.
@@ -464,14 +508,14 @@ function create_register_user_taxonomy() {
 				'delete_terms' => 'edit_users',
 				'assign_terms' => 'read',
 			),
-			'update_count_callback' => 'create_update_profession_count' // Use a custom function to update the count.
+			'update_count_callback' => 'create_update_user_category_count' // Use a custom function to update the count.
 		)
 	);
 }
 
 /**
- * Function for updating the 'profession' taxonomy count.  What this does is update the count of a specific term 
- * by the number of users that have been given the term.  We're not doing any checks for users specifically here. 
+ * Function for updating the 'user_category' taxonomy count.  What this does is update the count of a specific term
+ * by the number of users that have been given the term.  We're not doing any checks for users specifically here.
  * We're just updating the count with no specifics for simplicity.
  *
  * See the _update_post_term_count() function in WordPress for more info.
@@ -479,7 +523,7 @@ function create_register_user_taxonomy() {
  * @param array $terms List of Term taxonomy IDs
  * @param object $taxonomy Current taxonomy object of terms
  */
-function create_update_profession_count( $terms, $taxonomy ) {
+function create_update_user_category_count( $terms, $taxonomy ) {
 	global $wpdb;
 
 	foreach ( (array) $terms as $term ) {
@@ -493,17 +537,17 @@ function create_update_profession_count( $terms, $taxonomy ) {
 }
 
 /* Adds the taxonomy page in the admin. */
-add_action( 'admin_menu', 'create_add_profession_admin_page' );
+add_action( 'admin_menu', 'create_add_user_category_admin_page' );
 
 /**
- * Creates the admin page for the 'profession' taxonomy under the 'Users' menu.  It works the same as any 
- * other taxonomy page in the admin.  However, this is kind of hacky and is meant as a quick solution.  When 
- * clicking on the menu item in the admin, WordPress' menu system thinks you're viewing something under 'Posts' 
+ * Creates the admin page for the 'user_category' taxonomy under the 'Users' menu.  It works the same as any
+ * other taxonomy page in the admin.  However, this is kind of hacky and is meant as a quick solution.  When
+ * clicking on the menu item in the admin, WordPress' menu system thinks you're viewing something under 'Posts'
  * instead of 'Users'.  We really need WP core support for this.
  */
-function create_add_profession_admin_page() {
+function create_add_user_category_admin_page() {
 
-	$tax = get_taxonomy( 'profession' );
+	$tax = get_taxonomy( 'user_category' );
 
 	add_users_page(
 		esc_attr( $tax->labels->menu_name ),
@@ -513,15 +557,15 @@ function create_add_profession_admin_page() {
 	);
 }
 
-/* Create custom columns for the manage profession page. */
-add_filter( 'manage_edit-profession_columns', 'create_manage_profession_user_column' );
+/* Create custom columns for the manage user_category page. */
+add_filter( 'manage_edit-user_category_columns', 'create_manage_user_category_user_column' );
 
 /**
- * Unsets the 'posts' column and adds a 'users' column on the manage profession admin page.
+ * Unsets the 'posts' column and adds a 'users' column on the manage user_category admin page.
  *
  * @param array $columns An array of columns to be shown in the manage terms table.
  */
-function create_manage_profession_user_column( $columns ) {
+function create_manage_user_category_user_column( $columns ) {
 
 	unset( $columns['posts'] );
 
@@ -530,66 +574,66 @@ function create_manage_profession_user_column( $columns ) {
 	return $columns;
 }
 
-/* Customize the output of the custom column on the manage professions page. */
-add_action( 'manage_profession_custom_column', 'create_manage_profession_column', 10, 3 );
+/* Customize the output of the custom column on the manage categories page. */
+add_action( 'manage_user_category_custom_column', 'create_manage_user_category_column', 10, 3 );
 
 /**
- * Displays content for custom columns on the manage professions page in the admin.
+ * Displays content for custom columns on the manage categories page in the admin.
  *
  * @param string $display WP just passes an empty string here.
  * @param string $column The name of the custom column.
  * @param int $term_id The ID of the term being displayed in the table.
  */
-function create_manage_profession_column( $display, $column, $term_id ) {
+function create_manage_user_category_column( $display, $column, $term_id ) {
 
 	if ( 'users' === $column ) {
-		$term = get_term( $term_id, 'profession' );
+		$term = get_term( $term_id, 'user_category' );
 		echo $term->count;
 	}
 }
 
-/* Add section to the edit user page in the admin to select profession. */
-add_action( 'show_user_profile', 'create_edit_user_profession_section' );
-add_action( 'edit_user_profile', 'create_edit_user_profession_section' );
+/* Add section to the edit user page in the admin to select user_category. */
+add_action( 'show_user_profile', 'create_edit_user_user_category_section' );
+add_action( 'edit_user_profile', 'create_edit_user_user_category_section' );
 
 /**
- * Adds an additional settings section on the edit user/profile page in the admin.  This section allows users to 
- * select a profession from a checkbox of terms from the profession taxonomy.  This is just one example of 
+ * Adds an additional settings section on the edit user/profile page in the admin.  This section allows users to
+ * select a user_category from a checkbox of terms from the user_category taxonomy.  This is just one example of
  * many ways this can be handled.
  *
  * @param object $user The user object currently being edited.
  */
-function create_edit_user_profession_section( $user ) {
+function create_edit_user_user_category_section( $user ) {
 
-	$tax = get_taxonomy( 'profession' );
+	$tax = get_taxonomy( 'user_category' );
 
-	/* Make sure the user can assign terms of the profession taxonomy before proceeding. */
+	/* Make sure the user can assign terms of the user_category taxonomy before proceeding. */
 	if ( !current_user_can( $tax->cap->assign_terms ) )
 		return;
 
-	/* Get the terms of the 'profession' taxonomy. */
-	$terms = get_terms( 'profession', array( 'hide_empty' => false ) ); ?>
+	/* Get the terms of the 'user_category' taxonomy. */
+	$terms = get_terms( 'user_category', array( 'hide_empty' => false ) ); ?>
 
-	<h3><?php _e( 'Profession' ); ?></h3>
+	<h3><?php _e( 'Category' ); ?></h3>
 
 	<table class="form-table">
 
 		<tr>
-			<th><label for="profession"><?php _e( 'Select Profession' ); ?></label></th>
+			<th><label for="user_category"><?php _e( 'Select Category' ); ?></label></th>
 
 			<td><?php
 
-			/* If there are any profession terms, loop through them and display checkboxes. */
+			/* If there are any user_category terms, loop through them and display checkboxes. */
 			if ( !empty( $terms ) ) {
 
 				foreach ( $terms as $term ) { ?>
-					<input type="radio" name="profession" id="profession-<?php echo esc_attr( $term->slug ); ?>" value="<?php echo esc_attr( $term->slug ); ?>" <?php checked( true, is_object_in_term( $user->ID, 'profession', $term ) ); ?> /> <label for="profession-<?php echo esc_attr( $term->slug ); ?>"><?php echo $term->name; ?></label> <br />
+					<input type="radio" name="user_category" id="user_category-<?php echo esc_attr( $term->slug ); ?>" value="<?php echo esc_attr( $term->slug ); ?>" <?php checked( true, is_object_in_term( $user->ID, 'user_category', $term ) ); ?> /> <label for="user_category-<?php echo esc_attr( $term->slug ); ?>"><?php echo $term->name; ?></label> <br />
 				<?php }
 			}
 
-			/* If there are no profession terms, display a message. */
+			/* If there are no user_category terms, display a message. */
 			else {
-				_e( 'There are no professions available.' );
+				_e( 'There are no categories available.' );
 			}
 
 			?></td>
@@ -598,30 +642,30 @@ function create_edit_user_profession_section( $user ) {
 	</table>
 <?php }
 
-/* Update the profession terms when the edit user page is updated. */
-add_action( 'personal_options_update', 'create_save_user_profession_terms' );
-add_action( 'edit_user_profile_update', 'create_save_user_profession_terms' );
+/* Update the user_category terms when the edit user page is updated. */
+add_action( 'personal_options_update', 'create_save_user_user_category_terms' );
+add_action( 'edit_user_profile_update', 'create_save_user_user_category_terms' );
 
 /**
- * Saves the term selected on the edit user/profile page in the admin. This function is triggered when the page 
+ * Saves the term selected on the edit user/profile page in the admin. This function is triggered when the page
  * is updated.  We just grab the posted data and use wp_set_object_terms() to save it.
  *
  * @param int $user_id The ID of the user to save the terms for.
  */
-function create_save_user_profession_terms( $user_id ) {
+function create_save_user_user_category_terms( $user_id ) {
 
-	$tax = get_taxonomy( 'profession' );
+	$tax = get_taxonomy( 'user_category' );
 
 	/* Make sure the current user can edit the user and assign terms before proceeding. */
 	if ( !current_user_can( 'edit_user', $user_id ) && current_user_can( $tax->cap->assign_terms ) )
 		return false;
 
-	$term = esc_attr( $_POST['profession'] );
+	$term = esc_attr( $_POST['user_category'] );
 
 	/* Sets the terms (we're just using a single term) for the user. */
-	wp_set_object_terms( $user_id, array( $term ), 'profession', false);
+	wp_set_object_terms( $user_id, array( $term ), 'user_category', false);
 
-	clean_object_term_cache( $user_id, 'profession' );
+	clean_object_term_cache( $user_id, 'user_category' );
 }
 
 
@@ -653,8 +697,8 @@ function create_register_taxonomy_meta_boxes() {
 
 	$meta_sections[] = array(
 		'title'      => 'Standard Fields',		// section title
-		'taxonomies' => array( 'profession' ),	// list of taxonomies. Default is array('category', 'post_tag'). Optional
-		'id'         => 'profession_options',	// ID of each section, will be the option name
+		'taxonomies' => array( 'user_category' ),	// list of taxonomies. Default is array('category', 'post_tag'). Optional
+		'id'         => 'user_category_options',	// ID of each section, will be the option name
 		'fields' => array(
 			array(
 				'name' => 'Color Picker',
