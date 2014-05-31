@@ -61,7 +61,8 @@ function create_email_user() {
 	$user_object_from	= get_userdata( $_POST['user_id_from'] );
 
 	$to					= $user_object_to->user_email;
-	$headers[] = 'From: '. $user_object_from->first_name .' '. $user_object_from->last_name .' <'. $user_object_from->first_name .'>';
+	$headers[]			= 'From: '. $user_object_from->first_name .' '. $user_object_from->last_name .' <'. $user_object_from->email .'>';
+	$headers[]			= 'Reply-To: ' . $user_object_from->email;
 
 	$result				= wp_mail( sanitize_email( $to ), esc_html( $subject ), $message, $headers );
 
