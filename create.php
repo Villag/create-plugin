@@ -35,6 +35,10 @@ add_action( 'wp_head', 'create_user_category_styles' );
 add_action( 'wp_ajax_nopriv_create_get_users',	'create_get_users' );
 add_action( 'wp_ajax_create_get_users',			'create_get_users' );
 
+// Email user
+add_action( 'wp_ajax_nopriv_create_email_user',	'create_email_user' );
+add_action( 'wp_ajax_create_email_user',	'create_email_user' );
+
 // After user registration, login user
 add_action( 'gform_user_registered', 'create_gravity_registration_autologin', 10, 4 );
 
@@ -45,10 +49,49 @@ add_filter( 'gform_upload_path', 'create_change_upload_path', 10, 2 );
 add_action( 'gform_after_submission', 'create_update_avatar', 10, 2 );
 
 /**
+ * Via Ajax, sends the given user an email. This avoids exposing the user's
+ * email address to anyone.
+ */
+function create_email_user() {
+	check_ajax_referer( 'create_email_user_ajax_nonce', 'security' );
+
+	$subject			= $_POST['subject'];
+	$message			= $_POST['message'];
+	$user_object_to		= get_userdata( $_POST['user_id_to'] );
+	$user_object_from	= get_userdata( $_POST['user_id_from'] );
+
+	$to					= $user_object_to->user_email;
+	$headers[] = 'From: '. $user_object_from->first_name .' '. $user_object_from->last_name .' <'. $user_object_from->first_name .'>';
+
+	$result				= wp_mail( sanitize_email( $to ), esc_html( $subject ), $message, $headers );
+
+	if ( isset( $result ) && ( $result == 1 ) ) {
+		die(
+			json_encode(
+				array(
+					'success' => true,
+					'message' => __( 'Your email was successfully sent to '. $user_object_to->first_name .'.', 'create' )
+				)
+			)
+		);
+	} else {
+		die(
+			json_encode(
+				array(
+					'success' => false,
+					'message' => __( 'An error occured. Please refresh the page and try again.', 'create' )
+				)
+			)
+		);
+	}
+}
+
+/**
  * Gets all users for the current site and returns the data as a JSON
  * encoded object for use by an ajax call from the theme.
  */
 function create_get_users() {
+
 	if ( false === ( $user_array = get_transient( 'users_query' ) ) ) {
 		$users = get_users( array( 'fields' => 'ID' ) );
 		shuffle($users);
