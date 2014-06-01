@@ -48,6 +48,9 @@ add_filter( 'gform_upload_path', 'create_change_upload_path', 10, 2 );
 // Update avatar in user meta via Gravity Forms
 add_action( 'gform_after_submission', 'create_update_avatar', 10, 2 );
 
+// Clear the user query cache when a user updates their profile
+add_action( 'profile_update', 'create_profile_update', 10, 2 );
+
 /**
  * Via Ajax, sends the given user an email. This avoids exposing the user's
  * email address to anyone.
@@ -465,7 +468,7 @@ function create_change_upload_path( $path_info, $form_id ){
 function create_update_avatar( $entry, $form ){
 
 	global $current_user;
-    get_currentuserinfo();
+	get_currentuserinfo();
 
 	$user = get_user_by( 'id', $current_user->ID );
 	$hash = md5( strtolower( trim( $user->user_email ) ) );
@@ -489,10 +492,14 @@ function create_update_avatar( $entry, $form ){
 
 	// Set the primary job
 	$term = get_term_by( 'id', intval( $entry['6'] ), 'user_category', ARRAY_A );
-//die( print_r( $term ));
 	$return = wp_set_object_terms( $current_user->ID, $term['slug'], $term['taxonomy'], false );
 
-	// Clear the cached user query so this new avatar will show up
+}
+
+/**
+ * Clear the cached user query so this new avatar will show up
+*/
+function create_profile_update() {
 	delete_transient( 'users_query' );
 }
 
@@ -502,7 +509,7 @@ function create_update_avatar( $entry, $form ){
  */
 function create_register_user_taxonomy() {
 
-	 register_taxonomy(
+	register_taxonomy(
 		'user_category',
 		'user',
 		array(
