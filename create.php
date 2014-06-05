@@ -319,12 +319,15 @@ function create_user_errors( $user_id ) {
 	$user_data		= get_userdata( $user_id );
 	$email			= $user_data->user_email;
 
-	$user_meta		= get_user_meta( $user_id );
-	$first_name		= isset( $user_meta['first_name'][0] );
-	$last_name		= isset( $user_meta['last_name'][0] );
-	$zip			= isset( $user_meta['user_zip'][0] );
-	$primary_job	= isset( $user_meta['user_primary_job'][0] );
-	$avatar			= get_user_meta( $user_id, 'avatar', true );
+	$blog_id		= get_current_blog_id();
+	$blog_details	= get_blog_details( $blog_id );
+	$user_meta		= get_user_meta( $user_id, 'user_meta_'. str_replace( '/', '', $blog_details->path ), true );
+
+	$first_name		= get_user_meta( $user_id, 'first_name', true );
+	$last_name		= get_user_meta( $user_id, 'first_name', true );
+	$zip			= isset( $user_meta['zip'] );
+	$primary_job	= isset( $user_meta['primary_jobs'] );
+	$avatar			= isset( $user_meta['avatar'] );
 
 	$errors = array();
 
