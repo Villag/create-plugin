@@ -173,7 +173,6 @@ add_filter( 'wp_mail_from', 'create_mail_from' );
  * encoded object for use by an ajax call from the theme.
  */
 function create_get_users() {
-delete_transient( 'users_query' );
 	if ( false === ( $user_array = get_transient( 'users_query' ) ) ) {
 		$users = get_users( array( 'fields' => 'ID' ) );
 		shuffle( $users );
@@ -215,7 +214,6 @@ delete_transient( 'users_query' );
 			$user_object['primary_jobs'] 	= $primary_jobs;
 			$user_object['first_name']		= get_user_meta( $user, 'first_name', true );
 			$user_object['last_name']		= get_user_meta( $user, 'last_name', true );
-
 
 			$user_array[] = array_merge( $user_object, $user_meta );
 
@@ -429,94 +427,29 @@ function create_get_oneall_user( $user_id, $attribute = '' ) {
 }
 
 /**
- * Parses the user's avatar URL from the <img> element.
- */
-function create_get_avatar_url( $get_avatar ) {
-    preg_match( "/src='(.*?)'/i", $get_avatar, $matches );
-    return $matches[1];
-}
-
-/**
- * Adds Timthumb to a given image URL.
- */
-function create_timthumbit( $image, $width, $height ) {
-	$output = get_stylesheet_directory_uri() . "/timthumb.php?src=". $image ."&w=". $width ."&h=". $height ."&zc=1&a=c&f=2";
-	return $output;
-}
-
-/**
- * Check if the given URL returns a 404.
- */
-function create_is_404( $url ) {
-	$handle = curl_init($url);
-
-	curl_setopt($handle,  CURLOPT_RETURNTRANSFER, TRUE);
-
-	/* Get the HTML or whatever is linked in $url. */
-	$response = curl_exec($handle);
-
-	/* Check for 404 (file not found). */
-	$httpCode = curl_getinfo($handle, CURLINFO_HTTP_CODE);
-
-	if($httpCode == 404) {
-	    return false;
-	} else {
-		return true;
-	}
-
-	curl_close($handle);
-
-}
-
-/**
- * Figure out which avatar to use for a user.
- */
-function create_choose_avatar( $user_id ) {
-
-	// Make sure the user can edit this user
-	if ( !current_user_can( 'edit_user', $user_id ) )
-		return false;
-
-	$user = get_user_by( 'id', $user_id );
-	$hash = md5( strtolower( trim( $user->user_email ) ) );
-
-	$avatar_local		= basename( get_user_meta( $user_id, 'avatar_local', true ) );
-	$avatar_social		= create_get_oneall_user( $user_id, 'thumbnail' );
-	$avatar_gravatar	= 'http://www.gravatar.com/avatar/'. $hash .'?s=200&r=pg&d=404';
-
-	if( isset( $avatar_gravatar ) ) {
-		if( create_is_404( $avatar_gravatar ) ){
-			$check_gravatar		= file_get_contents( $avatar_gravatar );
-		} else {
-			unset( $avatar_gravatar );
-		}
-	}
-
-	if( !empty( $avatar_local ) ) {
-		echo '<img id="avatar-local" src="'. get_stylesheet_directory_uri() . '/timthumb.php?src='. get_stylesheet_directory() .'/uploads/avatars/'. $avatar_local .'&w=150&h=150&zc=1&a=c&f=2" class="pull-right" width="100">';
-	}
-	if( !empty( $avatar_social ) ) {
-		echo '<img id="avatar-social" src="'. get_stylesheet_directory_uri() . '/timthumb.php?src='. $avatar_social .'&w=150&h=150&zc=1&a=c&f=2" class="pull-right" width="100">';
-	}
-	if( !empty( $avatar_gravatar ) ) {
-		echo '<img id="avatar-gravatar" src="'. get_stylesheet_directory_uri() . '/timthumb.php?src='. $avatar_gravatar .'&w=150&h=150&zc=1&a=c&f=2" class="pull-right" width="100">';
-	}
-}
-
-/**
  * Get the user's avatar.
  */
 function create_get_avatar( $user_id ) {
 	global $blog_id;
-	$image = get_user_meta( $user_id, 'avatar', true );
+
+	// If user uploaded an avatar
+	$avatar_type = get_user_meta( $user_id, 'avatar_type', true );
+	if( $avatar_type == 'avatar_upload' ) {
+		$image = get_stylesheet_directory_uri() .'/uploads/avatars/' . get_user_meta( $user_id, 'avatar', true );
+	} else {
+		$image = get_user_meta( $user_id, 'avatar', true );
+	}
 
 	if( empty( $image ) ) {
 		return;
 	}
 
-	$image = get_wp_user_avatar_src( $user_id, 'thumbnail' );
-
 	$output	= get_stylesheet_directory_uri() . "/timthumb.php?src=". $image ."&w=150&h=150&zc=1&a=c&f=2";
+
+	$headers = get_headers( $output, 1 );
+	if ( $headers[0] != 'HTTP/1.1 200 OK' ) {
+		return;
+	}
 
 	return $output;
 }
@@ -525,44 +458,9 @@ function create_get_avatar( $user_id ) {
  * Changes the default Gravity Forms uploads path.
  */
 function create_change_upload_path( $path_info, $form_id ){
-   $path_info["path"] = get_stylesheet_directory() .'/uploads/avatars/';
-   $path_info["url"] = get_stylesheet_directory_uri() .'/uploads/avatars/';
-   return $path_info;
-}
-
-/**
- * When the Gravity Forms Profile is updated ensure the avatar is
- * updated, set the primary job, and delete the cached users_query.
- */
-function create_update_avatar( $entry, $form ){
-
-	global $current_user;
-	get_currentuserinfo();
-
-	$user = get_user_by( 'id', $current_user->ID );
-	$hash = md5( strtolower( trim( $user->user_email ) ) );
-
-	$avatar_type = $entry["11"];
-	update_user_meta( $current_user->ID, 'avatar_type', $entry["10"] );
-
-	if( $avatar_type == 'avatar_social'){
-		update_user_meta( $current_user->ID, 'avatar', create_get_oneall_user( $current_user->ID, 'picture' ) );
-	}
-	if( $avatar_type == 'avatar_gravatar'){
-		update_user_meta( $current_user->ID, 'avatar', 'http://www.gravatar.com/avatar/'. $hash .'?s=150' );
-	}
-	if( ( $avatar_type == 'avatar_upload' ) &! empty( $entry["10"] ) ){
-		update_user_meta( $current_user->ID, 'avatar', $entry["10"] );
-		update_user_meta( $current_user->ID, 'avatar_local', $entry["10"] );
-	} elseif( $avatar_type == 'avatar_upload' ) {
-		$previous_local = get_user_meta( $current_user->ID, 'avatar_local', true );
-		update_user_meta( $current_user->ID, 'avatar', $previous_local );
-	}
-
-	// Set the primary job
-	$term = get_term_by( 'id', intval( $entry['6'] ), 'user_category', ARRAY_A );
-	$return = wp_set_object_terms( $current_user->ID, $term['slug'], $term['taxonomy'], false );
-
+	$path_info["path"] = get_stylesheet_directory() .'/uploads/avatars/';
+	$path_info["url"] = get_stylesheet_directory_uri() .'/uploads/avatars/';
+	return $path_info;
 }
 
 /**
@@ -850,7 +748,6 @@ function create_migrate_users() {
 		$user_meta['twitter']			= get_user_meta( $user, 'user_twitter', true );
 		$user_meta['linkedin_url']		= get_user_meta( $user, 'user_linkedin', true );
 		$user_meta['skills']			= unserialize( get_user_meta( $user, 'user_skills', true ) );
-		$user_meta['avatar']			= create_get_avatar( $user );
 
 		// Get the site-specific user meta
 		$blog_id = get_current_blog_id();
