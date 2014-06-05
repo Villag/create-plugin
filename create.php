@@ -187,6 +187,7 @@ function create_get_users() {
 			}
 
 			$user_object['avatar']			= create_get_avatar( $user );
+
 			if( empty( $user_object['avatar'] ) ) {
 				continue;
 			}
@@ -432,12 +433,12 @@ function create_get_oneall_user( $user_id, $attribute = '' ) {
 function create_get_avatar( $user_id ) {
 	global $blog_id;
 
-	// If user uploaded an avatar
-	$avatar_type = get_user_meta( $user_id, 'avatar_type', true );
-	if( $avatar_type == 'avatar_upload' ) {
-		$image = get_stylesheet_directory_uri() .'/uploads/avatars/' . get_user_meta( $user_id, 'avatar', true );
-	} else {
+
+	$user = get_userdata( $user_id );
+	if( validate_gravatar( $user->user_email ) ) {
 		$image = get_user_meta( $user_id, 'avatar', true );
+	} else {
+		$image = 'http://createdenton.com/wp-content/themes/create/uploads/avatars/'. get_user_meta( $user_id, 'avatar', true );
 	}
 
 	if( empty( $image ) ) {
@@ -452,6 +453,19 @@ function create_get_avatar( $user_id ) {
 	}
 
 	return $output;
+}
+
+function validate_gravatar($email) {
+	// Craft a potential url and test its headers
+	$hash = md5(strtolower(trim($email)));
+	$uri = 'http://www.gravatar.com/avatar/' . $hash . '?d=404';
+	$headers = @get_headers($uri);
+	if (!preg_match("|200|", $headers[0])) {
+		$has_valid_avatar = FALSE;
+	} else {
+		$has_valid_avatar = TRUE;
+	}
+	return $has_valid_avatar;
 }
 
 /**
@@ -477,7 +491,6 @@ function create_profile_update() {
  * post being the object type.
  */
 function create_register_user_taxonomy() {
-
 	register_taxonomy(
 		'user_category',
 		'user',
