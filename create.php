@@ -39,17 +39,15 @@ add_action( 'wp_ajax_create_get_users',			'create_get_users' );
 add_action( 'wp_ajax_nopriv_create_email_user',	'create_email_user' );
 add_action( 'wp_ajax_create_email_user',	'create_email_user' );
 
+// Save user profile
+add_action( 'wp_ajax_nopriv_create_save_user_profile',	'create_save_user_profile' );
+add_action( 'wp_ajax_create_save_user_profile',	'create_save_user_profile' );
+
 // After user registration, login user
 add_action( 'gform_user_registered', 'create_gravity_registration_autologin', 10, 4 );
 
-// Change Gravity Forms upload path
-add_filter( 'gform_upload_path', 'create_change_upload_path', 10, 2 );
-
-// Update avatar in user meta via Gravity Forms
-add_action( 'gform_after_submission', 'create_update_avatar', 10, 2 );
-
 // Clear the user query cache when a user updates their profile
-add_action( 'profile_update', 'create_profile_update', 10, 2 );
+add_action( 'init', 'create_profile_update' );
 
 /**
  * Via Ajax, sends the given user an email. This avoids exposing the user's
@@ -90,6 +88,81 @@ function create_email_user() {
 	}
 }
 
+/**
+ * Via Ajax, sends the given user an email. This avoids exposing the user's
+ * email address to anyone.
+ */
+function create_save_user_profile() {
+	check_ajax_referer( 'create_save_user_profile_ajax_nonce', 'security' );
+
+	$first_name		= $_POST['first_name'];
+	$last_name		= $_POST['last_name'];
+	$email			= $_POST['email'];
+	$user_id		= $_POST['user_id'];
+	$blog_id		= $_POST['blog_id'];
+	$twitter		= $_POST['twitter'];
+	$website		= $_POST['website'];
+	$linkedin		= $_POST['linkedin'];
+	$phone			= $_POST['phone'];
+	$zip			= $_POST['zip'];
+	$skills			= $_POST['skills'];
+	$user_category	= $_POST['user_category'];
+	$bio			= $_POST['bio'];
+
+	$allowed_html = array(
+		'a' => array(
+		'href' => array(),
+		'title' => array()
+	),
+		'br' => array(),
+		'em' => array(),
+		'strong' => array()
+	);
+
+	$meta_value = array(
+		'twitter'		=> sanitize_text_field( $twitter ),
+		'website'		=> esc_url( $website ),
+		'linkedin'		=> esc_url( $linkedin ),
+		'email'			=> sanitize_email( $email ),
+		'phone'			=> sanitize_text_field( $phone ),
+		'zip'			=> intval( $zip ),
+		'skills'		=> $skills,
+		'bio'			=> wp_kses( $bio, $allowed_html )
+	);
+
+	// Global user meta
+	update_user_meta( $user_id, 'first_name', sanitize_text_field( $first_name ) );
+	update_user_meta( $user_id, 'last_name', sanitize_text_field( $last_name ) );
+
+	// Save user_category to taxonomy
+	wp_set_object_terms( $user_id, intval( $user_category ), 'user_category' );
+
+	$blog_details = get_blog_details( $blog_id );
+
+	// Blog-specific user meta
+	$result = update_user_meta( $user_id, 'user_meta_'. str_replace( '/', '', $blog_details->path ), $meta_value );
+
+	if ( isset( $result ) ) {
+		delete_transient( 'users_query' );
+		die(
+			json_encode(
+				array(
+					'success' => true
+				)
+			)
+		);
+	} else {
+		die(
+			json_encode(
+				array(
+					'success' => false,
+					'message' => __( 'An error occured. Please refresh the page and try again.', 'nervetask' )
+				)
+			)
+		);
+	}
+}
+
 function create_mail_from( $email ) {
 	return 'info@createdenton.com';
 }
@@ -100,12 +173,26 @@ add_filter( 'wp_mail_from', 'create_mail_from' );
  * encoded object for use by an ajax call from the theme.
  */
 function create_get_users() {
-
+delete_transient( 'users_query' );
 	if ( false === ( $user_array = get_transient( 'users_query' ) ) ) {
 		$users = get_users( array( 'fields' => 'ID' ) );
-		shuffle($users);
+		shuffle( $users );
 		foreach ( $users as $user ) {
 
+			// Get the site-specific user meta
+			$blog_id = get_current_blog_id();
+			$blog_details = get_blog_details( $blog_id );
+			$user_meta = get_user_meta( $user, 'user_meta_'. str_replace( '/', '', $blog_details->path ), true );
+			if( empty( $user_meta ) ) {
+				continue;
+			}
+
+			$user_object['avatar']			= create_get_avatar( $user );
+			if( empty( $user_object['avatar'] ) ) {
+				continue;
+			}
+
+			// Get the user category
 			$user_categories = wp_get_object_terms( $user, 'user_category' );
 			if ( $user_categories && ! is_wp_error( $user_categories ) ) :
 
@@ -124,25 +211,14 @@ function create_get_users() {
 
 			$userdata						= get_userdata( $user );
 			$user_object['ID'] 				= $user;
-			$user_object['primary_job'] 	= $primary_jobs;
-			$user_object['type']			= $types;
-			$user_object['email']			= $userdata->user_email;
+			$user_object['types'] 			= $types;
+			$user_object['primary_jobs'] 	= $primary_jobs;
 			$user_object['first_name']		= get_user_meta( $user, 'first_name', true );
 			$user_object['last_name']		= get_user_meta( $user, 'last_name', true );
-			$user_object['website']			= get_user_meta( $user, 'user_website', true );
-			$user_object['description']		= get_user_meta( $user, 'description', true );
-			$user_object['phone']			= get_user_meta( $user, 'user_phone', true );
-			$user_object['zip_code']		= get_user_meta( $user, 'user_zip', true );
-			$user_object['twitter']			= get_user_meta( $user, 'user_twitter', true );
-			$user_object['linkedin_url']	= get_user_meta( $user, 'user_linkedin', true );
-			$user_object['skills']			= unserialize( get_user_meta( $user, 'user_skills', true ) );
-			$user_object['avatar']			= create_get_avatar( $user );
 
-			if( empty( $user_object['avatar'] ) ) {
-				continue;
-			}
 
-			$user_array[] = $user_object;
+			$user_array[] = array_merge( $user_object, $user_meta );
+
 		}
 
 		set_transient( 'users_query', $user_array, 12 * HOUR_IN_SECONDS );
@@ -417,13 +493,13 @@ function create_choose_avatar( $user_id ) {
 	}
 
 	if( !empty( $avatar_local ) ) {
-		echo '<img id="avatar-local" src="'. get_stylesheet_directory_uri() . '/timthumb.php?src='. get_stylesheet_directory() .'/uploads/avatars/'. $avatar_local .'&w=165&h=165&zc=1&a=c&f=2" class="pull-right" width="100">';
+		echo '<img id="avatar-local" src="'. get_stylesheet_directory_uri() . '/timthumb.php?src='. get_stylesheet_directory() .'/uploads/avatars/'. $avatar_local .'&w=150&h=150&zc=1&a=c&f=2" class="pull-right" width="100">';
 	}
 	if( !empty( $avatar_social ) ) {
-		echo '<img id="avatar-social" src="'. get_stylesheet_directory_uri() . '/timthumb.php?src='. $avatar_social .'&w=165&h=165&zc=1&a=c&f=2" class="pull-right" width="100">';
+		echo '<img id="avatar-social" src="'. get_stylesheet_directory_uri() . '/timthumb.php?src='. $avatar_social .'&w=150&h=150&zc=1&a=c&f=2" class="pull-right" width="100">';
 	}
 	if( !empty( $avatar_gravatar ) ) {
-		echo '<img id="avatar-gravatar" src="'. get_stylesheet_directory_uri() . '/timthumb.php?src='. $avatar_gravatar .'&w=165&h=165&zc=1&a=c&f=2" class="pull-right" width="100">';
+		echo '<img id="avatar-gravatar" src="'. get_stylesheet_directory_uri() . '/timthumb.php?src='. $avatar_gravatar .'&w=150&h=150&zc=1&a=c&f=2" class="pull-right" width="100">';
 	}
 }
 
@@ -438,16 +514,9 @@ function create_get_avatar( $user_id ) {
 		return;
 	}
 
-	if( file_exists( get_stylesheet_directory() .'/uploads/avatars/'. basename( $image ) ) ) {
-		$image =  get_stylesheet_directory() .'/uploads/avatars/'. basename( $image );
-	}
+	$image = get_wp_user_avatar_src( $user_id, 'thumbnail' );
 
-	$output	= get_stylesheet_directory_uri() . "/timthumb.php?src=". $image ."&w=165&h=165&zc=1&a=c&f=2";
-
-	$headers = get_headers( $output, 1 );
-	if ( $headers[0] != 'HTTP/1.1 200 OK' ) {
-		return;
-	}
+	$output	= get_stylesheet_directory_uri() . "/timthumb.php?src=". $image ."&w=150&h=150&zc=1&a=c&f=2";
 
 	return $output;
 }
@@ -500,7 +569,9 @@ function create_update_avatar( $entry, $form ){
  * Clear the cached user query so this new avatar will show up
 */
 function create_profile_update() {
-	delete_transient( 'users_query' );
+	if( ! empty( $_POST['wp-user-avatar'] ) ) {
+		delete_transient( 'users_query' );
+	}
 }
 
 /**
@@ -744,3 +815,49 @@ function create_register_taxonomy_meta_boxes() {
 		new RW_Taxonomy_Meta( $meta_section );
 	}
 }
+
+/**
+ * Temporary function to migrate users from old data structure
+ */
+function create_migrate_users() {
+
+	$users = get_users( array( 'fields' => 'ID' ) );
+	foreach ( $users as $user ) {
+
+		// Get the user category
+		$user_categories = wp_get_object_terms( $user, 'user_category' );
+		if ( $user_categories && ! is_wp_error( $user_categories ) ) :
+
+			$user_category_slugs = array();
+			$user_category_names = array();
+
+			foreach ( $user_categories as $user_category ) {
+				$user_category_slugs[] = $user_category->slug;
+				$user_category_names[] = $user_category->name;
+			}
+
+			$types			= join( ' ', $user_category_slugs );
+			$primary_jobs	= join( ' ', $user_category_names );
+
+		endif;
+
+		$user_meta['types'] 			= $types;
+		$user_meta['primary_jobs'] 		= $primary_jobs;
+		$user_meta['website']			= get_user_meta( $user, 'user_website', true );
+		$user_meta['bio']				= get_the_author_meta( 'description', $user );
+		$user_meta['phone']				= get_user_meta( $user, 'user_phone', true );
+		$user_meta['zip_code']			= get_user_meta( $user, 'user_zip', true );
+		$user_meta['twitter']			= get_user_meta( $user, 'user_twitter', true );
+		$user_meta['linkedin_url']		= get_user_meta( $user, 'user_linkedin', true );
+		$user_meta['skills']			= unserialize( get_user_meta( $user, 'user_skills', true ) );
+		$user_meta['avatar']			= create_get_avatar( $user );
+
+		// Get the site-specific user meta
+		$blog_id = get_current_blog_id();
+		$blog_details = get_blog_details( $blog_id );
+		update_user_meta( $user, 'user_meta_'. str_replace( '/', '', $blog_details->path ), $user_meta );
+
+	}
+
+}
+//add_action( 'init', 'create_migrate_users' );
