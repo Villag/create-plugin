@@ -31,15 +31,15 @@ add_action( 'init', 'create_register_user_taxonomy' );
 // Insert 'user_category' CSS into HEAD
 add_action( 'wp_head', 'create_user_category_styles' );
 
-// Sets up ajax hooks for calling users
+// Ajax: get users
 add_action( 'wp_ajax_nopriv_create_get_users',	'create_get_users' );
 add_action( 'wp_ajax_create_get_users',			'create_get_users' );
 
-// Email user
+// Ajax: email user
 add_action( 'wp_ajax_nopriv_create_email_user',	'create_email_user' );
 add_action( 'wp_ajax_create_email_user',	'create_email_user' );
 
-// Save user profile
+// Ajax: save user profile
 add_action( 'wp_ajax_nopriv_create_save_user_profile',	'create_save_user_profile' );
 add_action( 'wp_ajax_create_save_user_profile',	'create_save_user_profile' );
 
@@ -147,7 +147,8 @@ function create_save_user_profile() {
 		die(
 			json_encode(
 				array(
-					'success' => true
+					'success' => true,
+					'message' => __( 'Your profile has been updated.', 'create' )
 				)
 			)
 		);
@@ -156,17 +157,12 @@ function create_save_user_profile() {
 			json_encode(
 				array(
 					'success' => false,
-					'message' => __( 'An error occured. Please refresh the page and try again.', 'nervetask' )
+					'message' => __( 'An error occured. Please refresh the page and try again.', 'create' )
 				)
 			)
 		);
 	}
 }
-
-function create_mail_from( $email ) {
-	return 'info@createdenton.com';
-}
-add_filter( 'wp_mail_from', 'create_mail_from' );
 
 /**
  * Gets all users for the current site and returns the data as a JSON
@@ -182,15 +178,6 @@ function create_get_users() {
 			$blog_id = get_current_blog_id();
 			$blog_details = get_blog_details( $blog_id );
 			$user_meta = get_user_meta( $user, 'user_meta_'. str_replace( '/', '', $blog_details->path ), true );
-			if( empty( $user_meta ) ) {
-				continue;
-			}
-
-			$user_object['avatar']			= create_get_avatar( $user );
-
-			if( empty( $user_object['avatar'] ) ) {
-				continue;
-			}
 
 			// Get the user category
 			$user_categories = wp_get_object_terms( $user, 'user_category' );
@@ -209,12 +196,17 @@ function create_get_users() {
 
 			endif;
 
+			//if( create_is_valid_user( $user ) !== true ) {
+			//	continue;
+			//}
+
 			$userdata						= get_userdata( $user );
 			$user_object['ID'] 				= $user;
 			$user_object['types'] 			= $types;
 			$user_object['primary_jobs'] 	= $primary_jobs;
 			$user_object['first_name']		= get_user_meta( $user, 'first_name', true );
 			$user_object['last_name']		= get_user_meta( $user, 'last_name', true );
+			$user_object['avatar']			= create_get_avatar( $user );
 
 			$user_array[] = array_merge( $user_object, $user_meta );
 
@@ -241,6 +233,11 @@ function create_get_users() {
 	}
 }
 
+function create_mail_from( $email ) {
+	return 'info@createdenton.com';
+}
+add_filter( 'wp_mail_from', 'create_mail_from' );
+
 /**
  * Auto login after registration.
  */
@@ -262,7 +259,7 @@ function create_gravity_registration_autologin( $user_id, $user_config, $entry, 
  * @param  Array $result Result array of the wpmu_validate_user_signup-function
  * @return Array         Altered result array
  */
-function custom_register_with_email($result) {
+function custom_register_with_email( $result ) {
 
 	if ( $result['user_name'] != '' && is_email( $result['user_name'] ) ) {
 
@@ -272,7 +269,7 @@ function custom_register_with_email($result) {
 
 	return $result;
 }
-add_filter('wpmu_validate_user_signup','custom_register_with_email');
+add_filter( 'wpmu_validate_user_signup','custom_register_with_email' );
 
 /**
  * Get the 'user_category' terms and colors and create a <style> block
@@ -304,10 +301,11 @@ function create_user_category_styles() {
  */
 function create_is_valid_user( $user_id ) {
 
-	if( create_user_errors( $user_id ) == null )
+	if( create_user_errors( $user_id ) == null ) {
 		return true;
-	else
+	} else {
 		return false;
+	}
 }
 
 /**
@@ -316,9 +314,6 @@ function create_is_valid_user( $user_id ) {
  */
 function create_user_errors( $user_id ) {
 
-	$user_data		= get_userdata( $user_id );
-	$email			= $user_data->user_email;
-
 	$blog_id		= get_current_blog_id();
 	$blog_details	= get_blog_details( $blog_id );
 	$user_meta		= get_user_meta( $user_id, 'user_meta_'. str_replace( '/', '', $blog_details->path ), true );
@@ -326,8 +321,9 @@ function create_user_errors( $user_id ) {
 	$first_name		= get_user_meta( $user_id, 'first_name', true );
 	$last_name		= get_user_meta( $user_id, 'first_name', true );
 	$zip			= isset( $user_meta['zip'] );
+	$email			= isset( $user_meta['email'] );
 	$primary_job	= isset( $user_meta['primary_jobs'] );
-	$avatar			= create_get_avatar( $user_id );
+	$avatar			= isset( $user_meta['avatar'] );
 
 	// Get the user category
 	$user_categories = wp_get_object_terms( $user_id, 'user_category' );
@@ -348,22 +344,22 @@ function create_user_errors( $user_id ) {
 
 	$errors = array();
 
-	if ( $email == '' )
+	if ( empty( $email ) )
 		$errors[] = ' email';
 
-	if ( !$first_name )
+	if ( empty( $first_name ) )
 		$errors[] = ' first name';
 
-	if ( !$last_name )
+	if ( empty( $last_name ) )
 		$errors[] = ' last name';
 
-	if ( !$zip )
+	if ( empty( $zip ) )
 		$errors[] = ' zip code';
 
-	if ( !$primary_jobs )
+	if ( empty( $primary_jobs ) )
 		$errors[] = ' talent';
 
-	if ( ! $avatar )
+	if ( empty( $avatar ) )
 		$errors[] = ' avatar';
 
 	$output = implode( ',', $errors );
@@ -372,93 +368,22 @@ function create_user_errors( $user_id ) {
 }
 
 /**
- * Gets the user's username and lowers its case and replaces any special
- * characters with hyphens.
- */
-function create_clean_username( $user_id ) {
-	$user_info = get_userdata( $user_id );
-
-	$username = strtolower( $user_info->user_login );
-
-	$output = preg_replace("![^a-z0-9]+!i", "-", $username );
-
-	return $output;
-}
-
-/**
- * Get the user information for a OneAll connected user.
- */
-function create_get_oneall_user( $user_id, $attribute = '' ) {
-
-	//Read settings
-	$settings = get_option ('oa_social_login_settings');
-
-	//API Settings
-	$api_connection_handler = ((!empty ($settings ['api_connection_handler']) AND $settings ['api_connection_handler'] == 'fsockopen') ? 'fsockopen' : 'curl');
-	$api_connection_use_https = ((!isset ($settings ['api_connection_use_https']) OR $settings ['api_connection_use_https'] == '1') ? true : false);
-
-	$site_subdomain = (!empty ($settings ['api_subdomain']) ? $settings ['api_subdomain'] : '');
-	$site_public_key = (!empty ($settings ['api_key']) ? $settings ['api_key'] : '');
-	$site_private_key = (!empty ($settings ['api_secret']) ? $settings ['api_secret'] : '');
-
-	//API Access Domain
-	$site_domain = $site_subdomain . '.api.oneall.com';
-
-	$user_token = get_user_meta($user_id, 'oa_social_login_user_token', true);
-
-	//Connection Resource
-	$resource_uri = 'https://' . $site_domain . '/users/' . $user_token . '.json';
-
-	// Initializing curl
-	$ch = curl_init($resource_uri);
-
-	// Configuring curl options
-	$options = array(CURLOPT_URL => $resource_uri, CURLOPT_HEADER => 0, CURLOPT_USERPWD => $site_public_key . ":" . $site_private_key, CURLOPT_TIMEOUT => 15, CURLOPT_VERBOSE => 0, CURLOPT_RETURNTRANSFER => 1, CURLOPT_SSL_VERIFYPEER => 1, CURLOPT_FAILONERROR => 0);
-
-	// Setting curl options
-	curl_setopt_array($ch, $options);
-
-	// Getting results
-	$result = curl_exec($ch);
-
-	$data = json_decode($result);
-
-	$output = '';
-
-	if( isset( $data->response->result ) ){
-
-		if( $attribute == '' ){
-			$output = isset( $data->response->result->data->user->identities );
-		}
-
-		if( $attribute == 'thumbnail' && isset( $data->response->result->data->user->identities->identity[0]->thumbnailUrl ) ) {
-			$output = $data->response->result->data->user->identities->identity[0]->thumbnailUrl;
-		}
-
-		if( $attribute == 'picture' && isset( $data->response->result->data->user->identities->identity[0]->pictureUrl ) ) {
-			$output = $data->response->result->data->user->identities->identity[0]->pictureUrl;
-		}
-
-	} else {
-		$output = create_get_avatar_url( get_avatar( $user_id, 150 ) );
-	}
-
-	return $output;
-
-}
-
-/**
  * Get the user's avatar.
  */
 function create_get_avatar( $user_id ) {
-	global $blog_id;
-
 
 	$user = get_userdata( $user_id );
-	if( validate_gravatar( $user->user_email ) ) {
-		$image = get_user_meta( $user_id, 'avatar', true );
-	} else {
-		$image = 'http://createdenton.com/wp-content/themes/create/uploads/avatars/'. get_user_meta( $user_id, 'avatar', true );
+	$avatar = get_user_meta( $user_id, 'avatar', true );
+
+	if( isset( $avatar ) ) {
+		if( strpos( $avatar, 'http:') !== false ) {
+			$image = $avatar;
+		} else {
+			$image = get_stylesheet_directory_uri(). '/uploads/avatars/'. get_user_meta( $user_id, 'avatar', true );
+
+		}
+	} elseif( validate_gravatar( $user->user_email ) ) {
+		$image = get_wp_user_avatar_src( $user_id, 150 );
 	}
 
 	if( empty( $image ) ) {
@@ -475,7 +400,7 @@ function create_get_avatar( $user_id ) {
 	return $output;
 }
 
-function validate_gravatar($email) {
+function validate_gravatar( $email ) {
 	// Craft a potential url and test its headers
 	$hash = md5(strtolower(trim($email)));
 	$uri = 'http://www.gravatar.com/avatar/' . $hash . '?d=404';
@@ -489,18 +414,10 @@ function validate_gravatar($email) {
 }
 
 /**
- * Changes the default Gravity Forms uploads path.
- */
-function create_change_upload_path( $path_info, $form_id ){
-	$path_info["path"] = get_stylesheet_directory() .'/uploads/avatars/';
-	$path_info["url"] = get_stylesheet_directory_uri() .'/uploads/avatars/';
-	return $path_info;
-}
-
-/**
  * Clear the cached user query so this new avatar will show up
 */
 function create_profile_update() {
+	delete_transient( 'users_query' );
 	if( ! empty( $_POST['wp-user-avatar'] ) ) {
 		delete_transient( 'users_query' );
 	}
