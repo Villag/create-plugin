@@ -327,7 +327,24 @@ function create_user_errors( $user_id ) {
 	$last_name		= get_user_meta( $user_id, 'first_name', true );
 	$zip			= isset( $user_meta['zip'] );
 	$primary_job	= isset( $user_meta['primary_jobs'] );
-	$avatar			= isset( $user_meta['avatar'] );
+	$avatar			= create_get_avatar( $user_id );
+
+	// Get the user category
+	$user_categories = wp_get_object_terms( $user_id, 'user_category' );
+	if ( $user_categories && ! is_wp_error( $user_categories ) ) :
+
+		$user_category_slugs = array();
+		$user_category_names = array();
+
+		foreach ( $user_categories as $user_category ) {
+			$user_category_slugs[] = $user_category->slug;
+			$user_category_names[] = $user_category->name;
+		}
+
+		$types			= join( ' ', $user_category_slugs );
+		$primary_jobs	= join( ' ', $user_category_names );
+
+	endif;
 
 	$errors = array();
 
@@ -343,8 +360,8 @@ function create_user_errors( $user_id ) {
 	if ( !$zip )
 		$errors[] = ' zip code';
 
-	if ( !$primary_job )
-		$errors[] = ' primary job';
+	if ( !$primary_jobs )
+		$errors[] = ' talent';
 
 	if ( ! $avatar )
 		$errors[] = ' avatar';
