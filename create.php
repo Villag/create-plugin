@@ -417,7 +417,6 @@ function validate_gravatar( $email ) {
  * Clear the cached user query so this new avatar will show up
 */
 function create_profile_update() {
-	delete_transient( 'users_query' );
 	if( ! empty( $_POST['wp-user-avatar'] ) ) {
 		delete_transient( 'users_query' );
 	}
