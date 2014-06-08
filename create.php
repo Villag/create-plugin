@@ -144,11 +144,7 @@ function create_save_user_profile() {
 
 	if ( isset( $result ) ) {
 
-		// Get the site-specific user meta
-		$blog_id = get_current_blog_id();
-		$blog_details = get_blog_details( $blog_id );
-		$blog_slug = str_replace( '/', '', $blog_details->path );
-		delete_transient( 'user_meta_'. $blog_slug .'_'. $user_id );
+		create_profile_update( $user_id );
 
 		die(
 			json_encode(
@@ -451,11 +447,22 @@ function create_profile_update( $user_id ) {
 	global $current_user;
 	get_currentuserinfo();
 
+	if( isset( $user_id ) ) {
+		// Delete the user's object cache
+		$blog_id = get_current_blog_id();
+		$blog_details = get_blog_details( $blog_id );
+		$blog_slug = str_replace( '/', '', $blog_details->path );
+		delete_transient( 'user_meta_'. $blog_slug .'_'. $user_id );
+	}
 	if( ! isset( $user_id ) ) {
 		$user_id = $current_user->ID;
 	}
 	if( ! empty( $_POST['wp-user-avatar'] ) ) {
-		delete_transient( 'users_query' );
+		// Delete the user's object cache
+		$blog_id = get_current_blog_id();
+		$blog_details = get_blog_details( $blog_id );
+		$blog_slug = str_replace( '/', '', $blog_details->path );
+		delete_transient( 'user_meta_'. $blog_slug .'_'. $user_id );
 	}
 }
 
