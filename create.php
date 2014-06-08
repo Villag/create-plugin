@@ -408,7 +408,9 @@ function create_get_avatar( $user_id ) {
 		if( strpos( $avatar, 'http:') !== false ) {
 			$image = $avatar;
 		} else {
-			$image = get_stylesheet_directory_uri(). '/uploads/avatars/'. get_user_meta( $user_id, 'avatar', true );
+			$stylesheet_directory_uri = get_stylesheet_directory_uri();
+			$parsed_stylesheet_directory_uri = parse_url( $stylesheet_directory_uri );
+			$image = $parsed_stylesheet_directory_uri['path']. '/uploads/avatars/'. get_user_meta( $user_id, 'avatar', true );
 
 		}
 	} elseif( validate_gravatar( $user->user_email ) ) {
