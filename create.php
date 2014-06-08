@@ -104,7 +104,7 @@ function create_save_user_profile() {
 	$website		= $_POST['website'];
 	$linkedin		= $_POST['linkedin'];
 	$phone			= $_POST['phone'];
-	$zip			= $_POST['zip'];
+	$zip			= $_POST['zip_code'];
 	$skills			= $_POST['skills'];
 	$user_category	= $_POST['user_category'];
 	$bio			= $_POST['bio'];
@@ -125,7 +125,7 @@ function create_save_user_profile() {
 		'linkedin'		=> esc_url( $linkedin ),
 		'email'			=> sanitize_email( $email ),
 		'phone'			=> sanitize_text_field( $phone ),
-		'zip'			=> intval( $zip ),
+		'zip_code'		=> intval( $zip ),
 		'skills'		=> $skills,
 		'bio'			=> wp_kses( $bio, $allowed_html )
 	);
@@ -143,7 +143,13 @@ function create_save_user_profile() {
 	$result = update_user_meta( $user_id, 'user_meta_'. str_replace( '/', '', $blog_details->path ), $meta_value );
 
 	if ( isset( $result ) ) {
-		delete_transient( 'users_query' );
+
+		// Get the site-specific user meta
+		$blog_id = get_current_blog_id();
+		$blog_details = get_blog_details( $blog_id );
+		$blog_slug = str_replace( '/', '', $blog_details->path );
+		delete_transient( 'user_meta_'. $blog_slug .'_'. $user_id );
+
 		die(
 			json_encode(
 				array(
@@ -169,55 +175,29 @@ function create_save_user_profile() {
  * encoded object for use by an ajax call from the theme.
  */
 function create_get_users() {
-	if ( false === ( $user_array = get_transient( 'users_query' ) ) ) {
+
+	if ( false === ( $users = get_transient( 'users_query' ) ) ) {
 		$users = get_users( array( 'fields' => 'ID' ) );
-		shuffle( $users );
-		foreach ( $users as $user ) {
+		foreach ( $users as $user_id ) {
+			$errors = create_user_errors( $user_id );
 
-			// Get the site-specific user meta
-			$blog_id = get_current_blog_id();
-			$blog_details = get_blog_details( $blog_id );
-			$user_meta = get_user_meta( $user, 'user_meta_'. str_replace( '/', '', $blog_details->path ), true );
-
-			// Get the user category
-			$user_categories = wp_get_object_terms( $user, 'user_category' );
-			if ( $user_categories && ! is_wp_error( $user_categories ) ) :
-
-				$user_category_slugs = array();
-				$user_category_names = array();
-
-				foreach ( $user_categories as $user_category ) {
-					$user_category_slugs[] = $user_category->slug;
-					$user_category_names[] = $user_category->name;
-				}
-
-				$types			= join( ' ', $user_category_slugs );
-				$primary_jobs	= join( ' ', $user_category_names );
-
-			endif;
-
-			//if( create_is_valid_user( $user ) !== true ) {
-			//	continue;
-			//}
-
-			$userdata						= get_userdata( $user );
-			$user_object['ID'] 				= $user;
-			$user_object['types'] 			= $types;
-			$user_object['primary_jobs'] 	= $primary_jobs;
-			$user_object['first_name']		= get_user_meta( $user, 'first_name', true );
-			$user_object['last_name']		= get_user_meta( $user, 'last_name', true );
-			$user_object['avatar']			= create_get_avatar( $user );
-
-			$user_array[] = array_merge( $user_object, $user_meta );
-
+			if( ! empty( $errors ) ) {
+				continue;
+			} else {
+				$valid_users[] = $user_id;
+			}
 		}
-
-		set_transient( 'users_query', $user_array, 12 * HOUR_IN_SECONDS );
+		shuffle( $valid_users );
+		set_transient( 'users_query', $valid_users, 12 * HOUR_IN_SECONDS );
 	} else {
-		$user_array = get_transient( 'users_query' );
+		$valid_users = get_transient( 'users_query' );
 	}
 
-	$result = array( 'users' => $user_array );
+	foreach ( $valid_users as $user_id ) {
+		$user_objects[] = create_get_user( $user_id );
+	}
+
+	$result = array( 'users' => $user_objects );
 
 	if ( isset( $result ) ) {
 		die( json_encode( $result ) );
@@ -231,6 +211,52 @@ function create_get_users() {
 			)
 		);
 	}
+}
+
+function create_get_user( $user_id ) {
+
+	// Get the site-specific user meta
+	$blog_id = get_current_blog_id();
+	$blog_details = get_blog_details( $blog_id );
+	$blog_slug = str_replace( '/', '', $blog_details->path );
+
+	if ( false === ( $user = get_transient( 'user_meta_'. $blog_slug .'_'. $user_id ) ) ) {
+
+		$user_meta = get_user_meta( $user_id, 'user_meta_'. str_replace( '/', '', $blog_details->path ), true );
+
+		// Get the user category
+		$user_categories = wp_get_object_terms( $user_id, 'user_category' );
+		if ( $user_categories && ! is_wp_error( $user_categories ) ) :
+
+			$user_category_slugs = array();
+			$user_category_names = array();
+
+			foreach ( $user_categories as $user_category ) {
+				$user_category_slugs[] = $user_category->slug;
+				$user_category_names[] = $user_category->name;
+			}
+
+			$types			= join( ' ', $user_category_slugs );
+			$primary_jobs	= join( ' ', $user_category_names );
+
+		endif;
+
+		$userdata						= get_userdata( $user_id );
+		$user_object['ID'] 				= $user_id;
+		$user_object['types'] 			= $types;
+		$user_object['primary_jobs'] 	= $primary_jobs;
+		$user_object['first_name']		= get_user_meta( $user_id, 'first_name', true );
+		$user_object['last_name']		= get_user_meta( $user_id, 'last_name', true );
+		$user_object['avatar']			= create_get_avatar( $user_id );
+
+		$user = array_merge( $user_object, $user_meta );
+		set_transient( 'user_meta_'. $blog_slug .'_'. $user_id, $user, 12 * HOUR_IN_SECONDS );
+
+	} else {
+		$user = get_transient( 'user_meta_'. $blog_slug .'_'. $user_id );
+	}
+
+	return $user;
 }
 
 function create_mail_from( $email ) {
@@ -301,11 +327,13 @@ function create_user_category_styles() {
  */
 function create_is_valid_user( $user_id ) {
 
-	if( create_user_errors( $user_id ) == null ) {
-		return true;
-	} else {
+	$errors = create_user_errors( $user_id );
+	if( ! empty( $errors ) ) {
 		return false;
+	} else {
+		return true;
 	}
+
 }
 
 /**
@@ -316,14 +344,15 @@ function create_user_errors( $user_id ) {
 
 	$blog_id		= get_current_blog_id();
 	$blog_details	= get_blog_details( $blog_id );
+	$user_info		= get_userdata( $user_id );
 	$user_meta		= get_user_meta( $user_id, 'user_meta_'. str_replace( '/', '', $blog_details->path ), true );
 
 	$first_name		= get_user_meta( $user_id, 'first_name', true );
 	$last_name		= get_user_meta( $user_id, 'first_name', true );
-	$zip			= isset( $user_meta['zip'] );
-	$email			= isset( $user_meta['email'] );
+	$email			= $user_info->user_email;
+	$zip			= isset( $user_meta['zip_code'] );
 	$primary_job	= isset( $user_meta['primary_jobs'] );
-	$avatar			= isset( $user_meta['avatar'] );
+	$avatar			= create_get_avatar( $user_id );
 
 	// Get the user category
 	$user_categories = wp_get_object_terms( $user_id, 'user_category' );
@@ -359,7 +388,7 @@ function create_user_errors( $user_id ) {
 	if ( empty( $primary_jobs ) )
 		$errors[] = ' talent';
 
-	if ( empty( $avatar ) )
+	if ( ! isset( $avatar ) )
 		$errors[] = ' avatar';
 
 	$output = implode( ',', $errors );
@@ -416,17 +445,25 @@ function validate_gravatar( $email ) {
 /**
  * Clear the cached user query so this new avatar will show up
 */
-function create_profile_update() {
+function create_profile_update( $user_id ) {
+	global $current_user;
+	get_currentuserinfo();
+
+	if( ! isset( $user_id ) ) {
+		$user_id = $current_user->ID;
+	}
 	if( ! empty( $_POST['wp-user-avatar'] ) ) {
 		delete_transient( 'users_query' );
 	}
 }
+
 
 /**
  * Registers the 'user_category' taxonomy for users.  This is a taxonomy for the 'user' object type rather than a
  * post being the object type.
  */
 function create_register_user_taxonomy() {
+
 	register_taxonomy(
 		'user_category',
 		'user',
