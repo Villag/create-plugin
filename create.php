@@ -246,6 +246,7 @@ function create_get_user( $user_id ) {
 		$user_object['last_name']		= get_user_meta( $user_id, 'last_name', true );
 		$user_object['avatar']			= create_get_avatar( $user_id );
 
+
 		$user = array_merge( $user_object, $user_meta );
 		set_transient( 'user_meta_'. $blog_slug .'_'. $user_id, $user, 12 * HOUR_IN_SECONDS );
 
@@ -399,20 +400,22 @@ function create_user_errors( $user_id ) {
  */
 function create_get_avatar( $user_id ) {
 
-	$user = get_userdata( $user_id );
-	$avatar = get_user_meta( $user_id, 'avatar', true );
+	$user			= get_userdata( $user_id );
+	$avatar			= get_user_meta( $user_id, 'avatar', true );
+	$wp_user_avatar	= get_wp_user_avatar_src( $user_id, 150 );
+	$wp_user_avatar = str_replace( get_site_url(), '', $wp_user_avatar );
 
-	if( isset( $avatar ) ) {
+	if( ! empty ( $avatar ) ) {
 		if( strpos( $avatar, 'http:') !== false ) {
 			$image = $avatar;
 		} else {
-			$image = '/wp-content/themes/create/uploads/avatars/'. get_user_meta( $user_id, 'avatar', true );
+			$image = '/wp-content/themes/create/uploads/avatars/'. $avatar;
 
 		}
-	} elseif( validate_gravatar( $user->user_email ) ) {
-		$image = get_wp_user_avatar_src( $user_id, 150 );
-	}
+	} elseif ( ! empty( $wp_user_avatar ) ) {
 
+		$image = $wp_user_avatar;
+	}
 
 	if( empty( $image ) ) {
 		return;
@@ -448,12 +451,16 @@ function create_profile_update( $user_id ) {
 	global $current_user;
 	get_currentuserinfo();
 
-	if( isset( $user_id ) ) {
+	if( ! empty( $user_id ) ) {
 		// Delete the user's object cache
 		$blog_id = get_current_blog_id();
 		$blog_details = get_blog_details( $blog_id );
 		$blog_slug = str_replace( '/', '', $blog_details->path );
 		delete_transient( 'user_meta_'. $blog_slug .'_'. $user_id );
+		if( class_exists('W3_Plugin_TotalCacheAdmin') ) {
+		    $plugin_totalcacheadmin = & w3_instance('W3_Plugin_TotalCacheAdmin');
+		    $plugin_totalcacheadmin->flush_all();
+		}
 	}
 	if( ! isset( $user_id ) ) {
 		$user_id = $current_user->ID;
@@ -464,6 +471,10 @@ function create_profile_update( $user_id ) {
 		$blog_details = get_blog_details( $blog_id );
 		$blog_slug = str_replace( '/', '', $blog_details->path );
 		delete_transient( 'user_meta_'. $blog_slug .'_'. $user_id );
+		if( class_exists('W3_Plugin_TotalCacheAdmin') ) {
+		    $plugin_totalcacheadmin = & w3_instance('W3_Plugin_TotalCacheAdmin');
+		    $plugin_totalcacheadmin->flush_all();
+		}
 	}
 }
 
