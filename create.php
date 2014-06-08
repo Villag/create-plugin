@@ -238,6 +238,7 @@ function create_get_user( $user_id ) {
 		endif;
 
 		$userdata						= get_userdata( $user_id );
+		$user_object['email']			= $userdata->user_email;
 		$user_object['ID'] 				= $user_id;
 		$user_object['types'] 			= $types;
 		$user_object['primary_jobs'] 	= $primary_jobs;
