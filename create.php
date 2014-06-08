@@ -393,6 +393,7 @@ function create_user_errors( $user_id ) {
 
 	$output = implode( ',', $errors );
 
+
 	return $output;
 }
 
@@ -408,14 +409,13 @@ function create_get_avatar( $user_id ) {
 		if( strpos( $avatar, 'http:') !== false ) {
 			$image = $avatar;
 		} else {
-			$stylesheet_directory_uri = get_stylesheet_directory_uri();
-			$parsed_stylesheet_directory_uri = parse_url( $stylesheet_directory_uri );
-			$image = $parsed_stylesheet_directory_uri['path']. '/uploads/avatars/'. get_user_meta( $user_id, 'avatar', true );
+			$image = '/wp-content/themes/create/uploads/avatars/'. get_user_meta( $user_id, 'avatar', true );
 
 		}
 	} elseif( validate_gravatar( $user->user_email ) ) {
 		$image = get_wp_user_avatar_src( $user_id, 150 );
 	}
+
 
 	if( empty( $image ) ) {
 		return;
