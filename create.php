@@ -148,6 +148,12 @@ function create_save_user_profile() {
 
 		$cache = create_clear_cache( array( 'user_id' => $user_id ) );
 
+		$errors = create_user_errors( $user_id );
+
+		if( empty( $errors ) ) {
+			create_clear_cache( 'all' );
+		}
+
 		die(
 			json_encode(
 				array(
@@ -460,7 +466,7 @@ function create_clear_cache( $args ) {
 
 			return 'User '. $args['user_id'] . ' cleared';
 		}
-	} elseif( array_key_exists( 'all', $args ) ) {
+	} elseif( $args == 'all' ) {
 		delete_transient( 'users_query' );
 		if( class_exists('W3_Plugin_TotalCacheAdmin') ) {
 			$plugin_totalcacheadmin = & w3_instance('W3_Plugin_TotalCacheAdmin');
