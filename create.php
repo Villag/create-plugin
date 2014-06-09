@@ -46,8 +46,7 @@ add_action( 'wp_ajax_create_save_user_profile',	'create_save_user_profile' );
 // After user registration, login user
 add_action( 'gform_user_registered', 'create_gravity_registration_autologin', 10, 4 );
 
-// Clear the user query cache when a user updates their profile
-add_action( 'init', 'create_profile_update' );
+add_action( 'user_register', 'create_user_registered', 10, 1 );
 
 /**
  * Via Ajax, sends the given user an email. This avoids exposing the user's
@@ -144,13 +143,14 @@ function create_save_user_profile() {
 
 	if ( isset( $result ) ) {
 
-		create_profile_update( $user_id );
+		$cache = create_clear_cache( array( 'user_id' => $user_id ) );
 
 		die(
 			json_encode(
 				array(
 					'success' => true,
-					'message' => __( 'Your profile has been updated.', 'create' )
+					'message' => __( 'Your profile has been updated.', 'create' ),
+					'cache' => $cache
 				)
 			)
 		);
@@ -159,7 +159,8 @@ function create_save_user_profile() {
 			json_encode(
 				array(
 					'success' => false,
-					'message' => __( 'An error occured. Please refresh the page and try again.', 'create' )
+					'message' => __( 'An error occured. Please refresh the page and try again.', 'create' ),
+					'cache' => $cache
 				)
 			)
 		);
@@ -189,11 +190,15 @@ function create_get_users() {
 		$valid_users = get_transient( 'users_query' );
 	}
 
-	foreach ( $valid_users as $user_id ) {
-		$user_objects[] = create_get_user( $user_id );
-	}
+	if( ! empty( $valid_users ) ) {
 
-	$result = array( 'users' => $user_objects );
+		foreach ( $valid_users as $user_id ) {
+			$user_objects[] = create_get_user( $user_id );
+		}
+
+		$result = array( 'users' => $user_objects );
+
+	}
 
 	if ( isset( $result ) ) {
 		die( json_encode( $result ) );
@@ -207,6 +212,10 @@ function create_get_users() {
 			)
 		);
 	}
+}
+
+function create_user_registered( $user_id ) {
+	create_clear_cache( 'all' );
 }
 
 function create_get_user( $user_id ) {
@@ -244,8 +253,7 @@ function create_get_user( $user_id ) {
 		$user_object['primary_jobs'] 	= $primary_jobs;
 		$user_object['first_name']		= get_user_meta( $user_id, 'first_name', true );
 		$user_object['last_name']		= get_user_meta( $user_id, 'last_name', true );
-		$user_object['avatar']			= create_get_avatar( $user_id );
-
+		$user_object['avatar']			= get_stylesheet_directory_uri() . "/timthumb.php?src=". get_wp_user_avatar_src( $user_id, 150 ) ."&w=150&h=150&zc=1&a=c&f=2";
 
 		$user = array_merge( $user_object, $user_meta );
 		set_transient( 'user_meta_'. $blog_slug .'_'. $user_id, $user, 12 * HOUR_IN_SECONDS );
@@ -350,7 +358,7 @@ function create_user_errors( $user_id ) {
 	$email			= $user_info->user_email;
 	$zip			= isset( $user_meta['zip_code'] );
 	$primary_job	= isset( $user_meta['primary_jobs'] );
-	$avatar			= create_get_avatar( $user_id );
+	$avatar			= get_wp_user_avatar_src( $user_id, 150 );
 
 	// Get the user category
 	$user_categories = wp_get_object_terms( $user_id, 'user_category' );
@@ -391,91 +399,58 @@ function create_user_errors( $user_id ) {
 
 	$output = implode( ',', $errors );
 
-
 	return $output;
 }
 
 /**
  * Get the user's avatar.
  */
-function create_get_avatar( $user_id ) {
+function create_get_avatar( $user_id, $size = 150 ) {
 
-	$user			= get_userdata( $user_id );
-	$avatar			= get_user_meta( $user_id, 'avatar', true );
-	$wp_user_avatar	= get_wp_user_avatar_src( $user_id, 150 );
-	$wp_user_avatar = str_replace( get_site_url(), '', $wp_user_avatar );
+	$image = get_wp_user_avatar_src( $user_id, $size );
 
-	if( ! empty ( $avatar ) ) {
-		if( strpos( $avatar, 'http:') !== false ) {
-			$image = $avatar;
+	if( strpos( $image, 'wpua') !== false ) {
+		$image = get_user_meta( $user_id, 'avatar', true );
+
+		if( strpos( $image, 'http') !== false ) {
+			$image = $image;
 		} else {
-			$image = '/wp-content/themes/create/uploads/avatars/'. $avatar;
-
+			$image = get_stylesheet_directory_uri() .'/uploads/avatars/'. $image;
 		}
-	} elseif ( ! empty( $wp_user_avatar ) ) {
-
-		$image = $wp_user_avatar;
 	}
 
-	if( empty( $image ) ) {
-		return;
-	}
-
-	$output	= get_stylesheet_directory_uri() . "/timthumb.php?src=". $image ."&w=150&h=150&zc=1&a=c&f=2";
-
-	$headers = get_headers( $output, 1 );
-	if ( $headers[0] != 'HTTP/1.1 200 OK' ) {
-		return;
-	}
-
-	return $output;
-}
-
-function validate_gravatar( $email ) {
-	// Craft a potential url and test its headers
-	$hash = md5(strtolower(trim($email)));
-	$uri = 'http://www.gravatar.com/avatar/' . $hash . '?d=404';
-	$headers = @get_headers($uri);
-	if (!preg_match("|200|", $headers[0])) {
-		$has_valid_avatar = FALSE;
-	} else {
-		$has_valid_avatar = TRUE;
-	}
-	return $has_valid_avatar;
+	return $image;
 }
 
 /**
  * Clear the cached user query so this new avatar will show up
 */
-function create_profile_update( $user_id ) {
-	global $current_user;
-	get_currentuserinfo();
+function create_clear_cache( $args ) {
 
-	if( ! empty( $user_id ) ) {
-		// Delete the user's object cache
-		$blog_id = get_current_blog_id();
-		$blog_details = get_blog_details( $blog_id );
-		$blog_slug = str_replace( '/', '', $blog_details->path );
-		delete_transient( 'user_meta_'. $blog_slug .'_'. $user_id );
-		if( class_exists('W3_Plugin_TotalCacheAdmin') ) {
-		    $plugin_totalcacheadmin = & w3_instance('W3_Plugin_TotalCacheAdmin');
-		    $plugin_totalcacheadmin->flush_all();
+	if( empty( $args ) ) {
+		return;
+	}
+
+	if ( array_key_exists( 'user_id', $args ) ) {
+		if( ! empty( $args['user_id'] ) ) {
+			// Delete the user's object cache
+			$blog_id = get_current_blog_id();
+			$blog_details = get_blog_details( $blog_id );
+			$blog_slug = str_replace( '/', '', $blog_details->path );
+			delete_transient( 'user_meta_'. $blog_slug .'_'. $args['user_id'] );
+
+			return 'User '. $args['user_id'] . ' cleared';
 		}
-	}
-	if( ! isset( $user_id ) ) {
-		$user_id = $current_user->ID;
-	}
-	if( ! empty( $_POST['wp-user-avatar'] ) ) {
-		// Delete the user's object cache
-		$blog_id = get_current_blog_id();
-		$blog_details = get_blog_details( $blog_id );
-		$blog_slug = str_replace( '/', '', $blog_details->path );
-		delete_transient( 'user_meta_'. $blog_slug .'_'. $user_id );
+	} elseif( array_key_exists( 'all', $args ) ) {
+		delete_transient( 'users_query' );
 		if( class_exists('W3_Plugin_TotalCacheAdmin') ) {
-		    $plugin_totalcacheadmin = & w3_instance('W3_Plugin_TotalCacheAdmin');
-		    $plugin_totalcacheadmin->flush_all();
+			$plugin_totalcacheadmin = & w3_instance('W3_Plugin_TotalCacheAdmin');
+			$plugin_totalcacheadmin->flush_all();
 		}
+		return 'Cleared users_query cache';
 	}
+
+	return 'Did not clear any caches';
 }
 
 
@@ -675,7 +650,6 @@ function create_save_user_user_category_terms( $user_id ) {
 	clean_object_term_cache( $user_id, 'user_category' );
 }
 
-
 /**
  * Registering meta sections for taxonomies
  *
@@ -765,3 +739,53 @@ function create_migrate_users() {
 
 }
 //add_action( 'init', 'create_migrate_users' );
+
+function create_assign_avatars() {
+
+	// Get the path to the upload directory.
+	$wp_upload_dir = wp_upload_dir();
+
+	$users = get_users();
+	foreach( $users as $user ) {
+		$avatar = create_get_avatar( $user->ID );
+
+		if( empty( $avatar ) ) {
+			continue;
+		}
+
+		$headers = get_headers( $avatar, 1 );
+		if ( $headers[0] != 'HTTP/1.1 200 OK' ) {
+			continue;
+		}
+
+		$filename = $wp_upload_dir['path'] .'/'. basename( $avatar );
+		copy( $avatar, $filename );
+
+		// Check the type of tile. We'll use this as the 'post_mime_type'.
+		$filetype = wp_check_filetype( basename( $filename ), null );
+
+		// Prepare an array of post data for the attachment.
+		$attachment = array(
+			'guid'           => $wp_upload_dir['url'] . '/' . basename( $filename ),
+			'post_mime_type' => $filetype['type'],
+			'post_title'     => preg_replace( '/\.[^.]+$/', '', basename( $filename ) ),
+			'post_content'   => '',
+			'post_status'    => 'inherit',
+			'post_author'    => $user->ID
+		);
+
+		// Insert the attachment.
+		$attach_id = wp_insert_attachment( $attachment, $filename );
+
+		// Make sure that this file is included, as wp_generate_attachment_metadata() depends on it.
+		require_once( ABSPATH . 'wp-admin/includes/image.php' );
+
+		// Generate the metadata for the attachment, and update the database record.
+		$attach_data = wp_generate_attachment_metadata( $attach_id, $filename );
+		wp_update_attachment_metadata( $attach_id, $attach_data );
+
+		update_user_meta( $user->ID, 'wp_2_user_avatar', $attach_id );
+
+	}
+}
+//add_action( 'init', 'create_assign_avatars' );
