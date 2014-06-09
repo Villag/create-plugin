@@ -48,6 +48,9 @@ add_action( 'gform_user_registered', 'create_gravity_registration_autologin', 10
 
 add_action( 'user_register', 'create_user_registered', 10, 1 );
 
+add_action( 'init', 'create_on_avatar_save' );
+
+
 /**
  * Via Ajax, sends the given user an email. This avoids exposing the user's
  * email address to anyone.
@@ -253,7 +256,7 @@ function create_get_user( $user_id ) {
 		$user_object['primary_jobs'] 	= $primary_jobs;
 		$user_object['first_name']		= get_user_meta( $user_id, 'first_name', true );
 		$user_object['last_name']		= get_user_meta( $user_id, 'last_name', true );
-		$user_object['avatar']			= get_stylesheet_directory_uri() . "/timthumb.php?src=". get_wp_user_avatar_src( $user_id, 150 ) ."&w=150&h=150&zc=1&a=c&f=2";
+		$user_object['avatar']			= get_stylesheet_directory_uri() . "/timthumb.php?src=". create_get_wp_user_avatar_src( $user_id, 150 ) ."&w=150&h=150&zc=1&a=c&f=2";
 
 		$user = array_merge( $user_object, $user_meta );
 		set_transient( 'user_meta_'. $blog_slug .'_'. $user_id, $user, 12 * HOUR_IN_SECONDS );
@@ -263,6 +266,13 @@ function create_get_user( $user_id ) {
 	}
 
 	return $user;
+}
+
+function create_get_wp_user_avatar_src( $user_id, $size = 150 ) {
+	$original = get_wp_user_avatar_src( $user_id, $size );
+	$home_url = get_bloginfo( 'url' );
+	$output = str_replace( $home_url, '', $original );
+	return $output;
 }
 
 function create_mail_from( $email ) {
@@ -420,6 +430,15 @@ function create_get_avatar( $user_id, $size = 150 ) {
 	}
 
 	return $image;
+}
+
+/**
+ * Clears the user's cache when their avatar is updated
+*/
+function create_on_avatar_save() {
+	if( isset( $_POST['wp-user-avatar'] ) ) {
+		create_clear_cache( array( 'user_id' => $_POST['user_id'] ) );
+	}
 }
 
 /**
