@@ -1,0 +1,97 @@
+# Copyright (C) 2014 CreateDenton
+# This file is distributed under the same license as the Create package.
+msgid ""
+msgstr ""
+"Project-Id-Version: Create 2.0.0\n"
+"Report-Msgid-Bugs-To: https://github.com/Villag/create-plugin\n"
+"POT-Creation-Date: 2014-06-10 23:29-0600\n"
+"PO-Revision-Date: 2014-06-10 23:29-0600\n"
+"Last-Translator: Patrick Daly <patrick@developdaly.com>\n"
+"Language-Team: LANGUAGE <patrick@developdaly.com>\n"
+"Language: en_US\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 1.6.5\n"
+"X-Poedit-KeywordsList: __;_e;_n;_x;esc_html_e;esc_html__;esc_attr_e;"
+"esc_attr__;_ex:1,2c;_nx:4c,1,2;_nx_noop:4c,1,2;_x:1,2c;_n:1,2\n"
+"X-Poedit-Basepath: ../\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\n"
+"X-Poedit-SearchPath-0: .\n"
+
+#: public/class-create.php:311
+msgid "Users Categories"
+msgstr ""
+
+#: public/class-create.php:312 public/class-create.php:428
+msgid "Category"
+msgstr ""
+
+#: public/class-create.php:313
+msgid "Categories"
+msgstr ""
+
+#: public/class-create.php:314
+msgid "Search Categories"
+msgstr ""
+
+#: public/class-create.php:315
+msgid "Popular Categories"
+msgstr ""
+
+#: public/class-create.php:316
+msgid "All Categories"
+msgstr ""
+
+#: public/class-create.php:317
+msgid "Edit Category"
+msgstr ""
+
+#: public/class-create.php:318
+msgid "Update Category"
+msgstr ""
+
+#: public/class-create.php:319
+msgid "Add New Category"
+msgstr ""
+
+#: public/class-create.php:320
+msgid "New Category Name"
+msgstr ""
+
+#: public/class-create.php:321
+msgid "Separate categories with commas"
+msgstr ""
+
+#: public/class-create.php:322
+msgid "Add or remove categories"
+msgstr ""
+
+#: public/class-create.php:323
+msgid "Choose from the most popular categories"
+msgstr ""
+
+#: public/class-create.php:390
+msgid "Users"
+msgstr ""
+
+#: public/class-create.php:433
+msgid "Select Category"
+msgstr ""
+
+#: public/class-create.php:447
+msgid "There are no categories available."
+msgstr ""
+
+#: public/class-create.php:570
+msgid "Your email was successfully sent to "
+msgstr ""
+
+#: public/class-create.php:579 public/class-create.php:668
+#: public/class-create.php:718
+msgid "An error occured. Please refresh the page and try again."
+msgstr ""
+
+#: public/class-create.php:658
+msgid "Your profile has been updated."
+msgstr ""
