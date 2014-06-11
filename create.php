@@ -146,6 +146,8 @@ function create_save_user_profile() {
 
 	if ( isset( $result ) ) {
 
+		add_existing_user_to_blog( array( 'user_id' => $user_id, 'role' => 'subscriber' ) );
+
 		$cache = create_clear_cache( array( 'user_id' => $user_id ) );
 
 		$errors = create_user_errors( $user_id );
